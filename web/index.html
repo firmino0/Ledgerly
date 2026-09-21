@@ -199,7 +199,7 @@
         <h3><span class="mark mark-allow">Tested</span></h3>
         <ul>
           <li>34 unit tests across guardrails, rebalancing math, swap route selection, wallet transaction data and the read-only filter</li>
-          <li>Signing with a connected wallet, using a simulated wallet: the exact transactions it was asked to send, and the server rejecting a transaction that does not match</li>
+          <li>Signing with a connected wallet: the exact transactions checked with a simulated wallet, the server rejecting a transaction that does not match, and one real $0.50 NVDA buy signed and confirmed on Robinhood Chain mainnet</li>
           <li>Live SERV Reasoning calls with Multipath, Prompt Guard and Shadow Agent</li>
           <li>Live onchain quotes on Robinhood Chain mainnet</li>
           <li>The dashboard end to end in dry run, including approvals and restarts</li>
@@ -208,7 +208,7 @@
       <div>
         <h3><span class="mark mark-hold">Not yet</span></h3>
         <ul>
-          <li>A real mainnet swap, sell or payment, from the agent wallet or a real wallet extension. The code is written; no live transaction has been sent</li>
+          <li>Live sells and payments, and the agent wallet sending on its own. The code is written; only one signed buy has run on mainnet</li>
           <li>Robinhood MCP with a real login. The connector is read-only and off by default</li>
         </ul>
       </div>
