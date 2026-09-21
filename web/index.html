@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledgerly</title>
+<meta name="description" content="A treasury agent on Robinhood Chain that invests, rebalances and pays, and writes down why. The model proposes; plain code decides.">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/assets/fonts/newsreader-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/theme.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-row">
+    <a class="brand" href="/" aria-label="Ledgerly home">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="4"/><g stroke-width="2" stroke-linecap="square"><path d="M9 8v16"/><path d="M9 24h14"/><path d="M14 12h9"/><path d="M14 17h9"/></g></svg>
+      <span>Ledgerly</span>
+    </a>
+    <nav aria-label="Primary">
+      <a href="#jobs">What it does</a>
+      <a href="#path">How it decides</a>
+      <a href="#rules">Rules</a>
+      <a href="#status">Status</a>
+    </nav>
+    <div class="top-actions">
+      <button class="btn btn-quiet btn-sm" type="button" data-theme-toggle aria-label="Toggle light and dark theme">Theme</button>
+      <a class="btn btn-primary btn-sm" href="/app">Open dashboard</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- hero -->
+  <section class="hero wrap">
+    <div class="hero-copy">
+      <p class="eyebrow">SERV Hackathon &middot; Robinhood Mainnet &amp; MCP</p>
+      <h1>The model proposes.<br><em>Code decides.</em></h1>
+      <p class="lede">Ledgerly is a treasury agent on Robinhood Chain. It invests, rebalances and pays, and it writes down why. Every action passes the same set of rules the model cannot change.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="/app">Open the dashboard</a>
+        <a class="btn" href="#path">See how it decides</a>
+      </div>
+    </div>
+
+    <figure class="sheet" aria-labelledby="sheet-cap">
+      <figcaption id="sheet-cap" class="sheet-cap"><span class="eyebrow">Ledger</span><span class="eyebrow">Illustrative entries</span></figcaption>
+      <ol class="entries">
+        <li>
+          <span class="t num">09:00</span>
+          <div class="what">
+            <strong>DCA &middot; buy NVDA</strong>
+            <p>Price sits near the top of today's range, so it bought half of the planned $30.</p>
+          </div>
+          <span class="amt num">$15.00</span>
+          <span class="mark mark-allow">Allowed</span>
+        </li>
+        <li>
+          <span class="t num">09:04</span>
+          <div class="what">
+            <strong>Rebalance &middot; sell NVDA</strong>
+            <p>40% held against a 10% target. Above the $25 auto-approve line, so it waits for you.</p>
+          </div>
+          <span class="amt num">$30.08</span>
+          <span class="mark mark-hold">Held</span>
+        </li>
+        <li>
+          <span class="t num">09:07</span>
+          <div class="what">
+            <strong>Bill &middot; to 0xdead…beef</strong>
+            <p>This address was never registered as a payee. Payments to unknown addresses are always refused.</p>
+          </div>
+          <span class="amt num">$5.00</span>
+          <span class="mark mark-deny">Denied</span>
+        </li>
+      </ol>
+    </figure>
+  </section>
+
+  <!-- jobs -->
+  <section id="jobs" class="block wrap">
+    <div class="block-head">
+      <p class="eyebrow">What it does</p>
+      <h2>Four jobs, one guarded path</h2>
+    </div>
+    <ol class="jobs">
+      <li>
+        <span class="n num">01</span>
+        <h3>Dollar-cost averaging</h3>
+        <p>Recurring buys of Robinhood stock tokens. SERV Reasoning reads the day's price range and decides whether to buy, skip, or scale the amount between half and one and a half times.</p>
+      </li>
+      <li>
+        <span class="n num">02</span>
+        <h3>Rebalancing</h3>
+        <p>Set target weights. Ledgerly sells what has grown too large and buys what has fallen behind, once an asset drifts past your threshold. The sizing is arithmetic, not a model's guess.</p>
+      </li>
+      <li>
+        <span class="n num">03</span>
+        <h3>Payroll</h3>
+        <p>Pay freelancers per milestone in USDG, only to addresses you registered first.</p>
+      </li>
+      <li>
+        <span class="n num">04</span>
+        <h3>Bills</h3>
+        <p>Pay recurring invoices the same way. Nothing goes out to a payee that is not on your list.</p>
+      </li>
+    </ol>
+  </section>
+
+  <!-- path -->
+  <section id="path" class="block wrap">
+    <div class="block-head">
+      <p class="eyebrow">How it decides</p>
+      <h2>The model never touches the money</h2>
+      <p class="sub">SERV Reasoning helps size and explain. The gate in the middle is ordinary code with fixed rules, so a confused or manipulated model still cannot overspend.</p>
+    </div>
+
+    <div class="flow">
+      <div class="flow-serv">
+        <span class="eyebrow">SERV Reasoning</span>
+        <p>Sizes DCA buys and writes the plain-English reason for each action. It advises; it does not approve.</p>
+      </div>
+      <ol class="flow-steps">
+        <li>
+          <span class="eyebrow">1 &middot; Request</span>
+          <h3>A job asks to act</h3>
+          <p>DCA, rebalance, payroll or a bill proposes a buy, a sell or a payment.</p>
+        </li>
+        <li class="gate">
+          <span class="eyebrow">2 &middot; Guardrails</span>
+          <h3>Plain code decides</h3>
+          <p>Spend caps, the payee allowlist and the approval threshold. The result is allow, hold for you, or deny.</p>
+        </li>
+        <li>
+          <span class="eyebrow">3 &middot; Execute</span>
+          <h3>Paper or onchain</h3>
+          <p>A simulated portfolio in dry run. Uniswap v3 on Robinhood Chain when live.</p>
+        </li>
+        <li>
+          <span class="eyebrow">4 &middot; Ledger</span>
+          <h3>Written down</h3>
+          <p>Every decision is kept with its reasoning, whether it ran, was held, or was refused.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- rules -->
+  <section id="rules" class="block wrap">
+    <div class="block-head">
+      <p class="eyebrow">Rules</p>
+      <h2>What the model cannot argue with</h2>
+      <p class="sub">Defaults shown here are set in one file and can be tightened for a first live run.</p>
+    </div>
+    <dl class="spec">
+      <div><dt>Per-transaction cap</dt><dd class="num">$50</dd></div>
+      <div><dt>Daily cap</dt><dd class="num">$200</dd></div>
+      <div><dt>Human approval above</dt><dd class="num">$25</dd></div>
+      <div><dt>Approvals expire after</dt><dd class="num">24 h</dd></div>
+      <div><dt>Payees</dt><dd>Allowlist only</dd></div>
+      <div><dt>Default mode</dt><dd>Dry run</dd></div>
+    </dl>
+    <p class="note">Going live on mainnet takes two separate settings, so a single typo cannot start spending real funds. Approved actions are checked against the caps again at the moment of approval.</p>
+    <p class="note">Held actions can be approved two ways: the agent's own wallet sends them within your limits, or you connect a browser wallet and <strong>sign them yourself</strong>. The server checks that what your wallet sent matches what was prepared before it records anything.</p>
+  </section>
+
+  <!-- serv -->
+  <section class="block wrap">
+    <div class="block-head">
+      <p class="eyebrow">Built on SERV Reasoning</p>
+      <h2>Where it does real work</h2>
+    </div>
+    <div class="trio">
+      <div>
+        <h3>Multipath</h3>
+        <p>Keeps the model's reply in the strict format the DCA logic parses, so a sizing decision is never a paragraph of prose.</p>
+      </div>
+      <div>
+        <h3>Prompt Guard</h3>
+        <p>Payee names and memos are typed by people and end up in prompts. Prompt Guard screens them first.</p>
+      </div>
+      <div>
+        <h3>Shadow Agent</h3>
+        <p>Validates each DCA decision and regenerates weak replies. If reasoning is unavailable, a run falls back to a plain scheduled buy, still behind the guardrails.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- status -->
+  <section id="status" class="block wrap">
+    <div class="block-head">
+      <p class="eyebrow">Status</p>
+      <h2>What has and hasn't been proven</h2>
+    </div>
+    <div class="status">
+      <div>
+        <h3><span class="mark mark-allow">Tested</span></h3>
+        <ul>
+          <li>34 unit tests across guardrails, rebalancing math, swap route selection, wallet transaction data and the read-only filter</li>
+          <li>Signing with a connected wallet, using a simulated wallet: the exact transactions it was asked to send, and the server rejecting a transaction that does not match</li>
+          <li>Live SERV Reasoning calls with Multipath, Prompt Guard and Shadow Agent</li>
+          <li>Live onchain quotes on Robinhood Chain mainnet</li>
+          <li>The dashboard end to end in dry run, including approvals and restarts</li>
+        </ul>
+      </div>
+      <div>
+        <h3><span class="mark mark-hold">Not yet</span></h3>
+        <ul>
+          <li>A real mainnet swap, sell or payment, from the agent wallet or a real wallet extension. The code is written; no live transaction has been sent</li>
+          <li>Robinhood MCP with a real login. The connector is read-only and off by default</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- run -->
+  <section class="block wrap run">
+    <div class="block-head">
+      <p class="eyebrow">Run it</p>
+      <h2>Try it in paper mode</h2>
+      <p class="sub">No wallet or funds needed. Real prices, real onchain quotes, a simulated portfolio.</p>
+    </div>
+    <pre class="code" tabindex="0"><code>npm install
+cp .env.example .env    # add your SERV_API_KEY
+npm run dashboard</code></pre>
+    <div class="cta">
+      <a class="btn btn-primary" href="/app">Open the dashboard</a>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-row">
+    <span>Ledgerly &middot; built for the SERV Hackathon, Edition 01</span>
+    <span class="muted">Set in Newsreader and IBM Plex</span>
+  </div>
+</footer>
+
+</body>
+</html>
