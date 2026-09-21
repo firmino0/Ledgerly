@@ -49,9 +49,9 @@ const MODULES = { dca: 'DCA', rebalance: 'Rebalance', payroll: 'Payroll', bills:
 
 /** [label, css class] for a ledger entry. */
 function markFor(e) {
+  if (e.executed) return ['Executed', 'mark-allow']
   if (e.verdict === 'deny') return ['Denied', 'mark-deny']
   if (e.verdict === 'needs_approval') return ['Held', 'mark-hold']
-  if (e.executed) return ['Executed', 'mark-allow']
   return ['No action', 'mark-quiet']
 }
 const mark = e => {
