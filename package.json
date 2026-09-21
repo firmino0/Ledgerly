@@ -1,0 +1,27 @@
+{
+  "name": "ledgerly",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Autonomous treasury agent on Robinhood Chain that pays, invests and explains every move.",
+  "scripts": {
+    "dev": "tsx src/agent.ts",
+    "dashboard": "tsx src/dashboard-main.ts",
+    "preflight": "tsx src/preflight.ts",
+    "check": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@openserv-labs/sdk": "^2.4.1",
+    "dotenv": "^18.0.1",
+    "openai": "^5.23.2",
+    "viem": "^2.56.8",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
