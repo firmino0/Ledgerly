@@ -1,7 +1,7 @@
 import { addPending, type PayRequest, payeeSet } from './approvals.js'
 import { sendPayment } from './chain.js'
-import { config } from './config.js'
-import { dryRun, policy } from './mode.js'
+import { config, tradingOffReason } from './config.js'
+import { policy } from './mode.js'
 import { isUser } from './store.js'
 import { evaluate } from './guardrails.js'
 import { type LedgerEntry, readAll, record, spentToday } from './ledger.js'
@@ -11,21 +11,20 @@ export type { PayRequest } from './approvals.js'
 export { addPayee, listPayees } from './approvals.js'
 
 export interface PayResult {
-  status: 'executed' | 'dry_run' | 'pending_approval' | 'denied' | 'failed'
+  status: 'executed' | 'pending_approval' | 'denied' | 'failed'
   message: string
   approvalId?: string
   txHash?: string
 }
 
+const off = () => tradingOffReason ?? 'Trading is switched off.'
+
 const entry = (req: PayRequest, verdict: LedgerEntry['verdict'], executed: boolean, reasoning: string, extra: Partial<LedgerEntry> = {}) =>
-  record({ module: req.module, action: req.memo, amountUsd: req.amountUsd, to: req.to, verdict, executed, dryRun: dryRun(), reasoning, ...extra })
+  record({ module: req.module, action: req.memo, amountUsd: req.amountUsd, to: req.to, verdict, executed, reasoning, ...extra })
 
 async function execute(req: PayRequest, reasoning: string, verdict: LedgerEntry['verdict']): Promise<PayResult> {
-  if (isUser() && !dryRun()) throw new Error('Accounts sign their own transactions, so nothing is sent from the server. Use "Sign with my wallet".')
-  if (dryRun()) {
-    entry(req, verdict, true, reasoning)
-    return { status: 'dry_run', message: `DRY RUN: would pay ${req.amountUsd} to ${req.to}. ${reasoning}` }
-  }
+  if (isUser()) throw new Error('Accounts sign their own transactions, so nothing is sent from the server. Use "Sign with my wallet".')
+  if (!config.live) throw new Error(off())
   try {
     const txHash = await sendPayment(req.to as `0x${string}`, req.amountUsd)
     entry(req, verdict, true, reasoning, { txHash })
@@ -39,6 +38,7 @@ async function execute(req: PayRequest, reasoning: string, verdict: LedgerEntry[
 
 /** Single path for every outgoing payment (payroll and bills). The model never bypasses this. */
 export async function pay(req: PayRequest): Promise<PayResult> {
+  if (!config.live) return { status: 'denied', message: off() }
   const verdict = evaluate(policy(), req, spentToday(readAll()), payeeSet())
   const context = `Module: ${req.module}. Memo: ${req.memo}. Amount: ${req.amountUsd}. To: ${req.to}. Verdict: ${verdict.decision}${'reason' in verdict ? ` (${verdict.reason})` : ''}.`
   const reasoning = await explain(context)

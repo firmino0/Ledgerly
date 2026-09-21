@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, test } from 'node:test'
 import { USER_ALLOWED, USER_POLICY, checkLogin, createAccount, loginAllowed, removeAccount, signupAllowed, usersEnabled, validatePassword, validateUsername } from '../src/accounts.js'
-import { makeSandboxToken, makeUserToken, verifySandboxToken, verifyUserToken } from '../src/auth.js'
+import { makeUserToken, verifyUserToken } from '../src/auth.js'
 import { walletAddress, walletClient } from '../src/chain.js'
-import { dryRun, policy } from '../src/mode.js'
+import { policy } from '../src/mode.js'
 import { type Backend, dataPath, isUser, memoryBackend, rawGet, readJson, setBackendForTests, withStore, writeJson } from '../src/store.js'
 
 const saved = { ...process.env }
@@ -59,7 +59,7 @@ test('the stored record holds a salted hash, never the password', async () => {
   assert.notEqual(rec.hash, other?.hash, 'same password, different salt, different hash')
 })
 
-test('account tokens verify only for the right secret and time, and never as sandbox tokens', () => {
+test('account tokens verify only for the right secret and time', () => {
   const now = Date.now()
   const t = makeUserToken('abcdefgh12345678', now)
   assert.equal(verifyUserToken(t, now + 1000), 'abcdefgh12345678')
@@ -67,8 +67,6 @@ test('account tokens verify only for the right secret and time, and never as san
   const [id, exp, sig] = t.split('.')
   assert.equal(verifyUserToken(`otheridvalue1234.${exp}.${sig}`, now + 1000), null)
   assert.equal(verifyUserToken(`${id}.${Number(exp) + 100000}.${sig}`, now + 1000), null)
-  assert.equal(verifyUserToken(makeSandboxToken('abcdefgh12345678')), null)
-  assert.equal(verifySandboxToken(t), null)
   process.env.AUTH_SECRET = 'a-different-secret'
   assert.equal(verifyUserToken(t, now + 1000), null)
   for (const bad of [undefined, '', 'a', 'a.b', 'a.b.c.d', '../x.1.2']) assert.equal(verifyUserToken(bad), null)
@@ -104,7 +102,6 @@ test('an account can never reach a server wallet or the owner\'s spending limits
     assert.throws(() => walletClient(), /Only the owner has a server-side wallet/)
   }, { tenant: { kind: 'user', id: 'user-zed-123456' } })
   await withStore(async () => assert.equal(isUser(), false))
-  assert.equal(dryRun() || true, true)
 })
 
 test('an account\'s wallet is the address it linked, read-only', async () => {
@@ -117,7 +114,7 @@ test('an account\'s wallet is the address it linked, read-only', async () => {
 })
 
 test('the account allow-list has no cron and no owner, login or delete-account endpoints', () => {
-  for (const entry of USER_ALLOWED) assert.doesNotMatch(entry, /cron|login|logout|signup|signin|sandbox|delete/, entry)
+  for (const entry of USER_ALLOWED) assert.doesNotMatch(entry, /cron|login|logout|signup|signin|delete/, entry)
   for (const needed of ['GET /api/state', 'POST /api/wallet/prepare', 'POST /api/wallet/complete', 'POST /api/reject', 'POST /api/account/wallet']) assert.ok(USER_ALLOWED.has(needed), needed)
 })
 

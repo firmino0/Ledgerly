@@ -86,27 +86,6 @@ export function sameOrigin(req: IncomingMessage): boolean {
   return !site || site === 'same-origin' || site === 'none'
 }
 
-// ---------- sandbox sessions ----------
-// A visitor to /sandbox gets an anonymous session: a random id, signed so it cannot be forged or guessed for someone else.
-const SB_COOKIE = 'ledgerly_sb'
-export const SANDBOX_SESSION_SECONDS = 24 * 3600
-
-export const makeSandboxId = () => randomBytes(16).toString('base64url')
-const sbSign = (id: string) => createHmac('sha256', secret()).update('sandbox:' + id).digest('base64url')
-export const makeSandboxToken = (id: string) => `${id}.${sbSign(id)}`
-
-/** The sandbox id inside a valid token, or null. */
-export function verifySandboxToken(token: string | undefined): string | null {
-  if (!token) return null
-  const [id, sig, extra] = token.split('.')
-  if (!id || !sig || extra !== undefined || !/^[A-Za-z0-9_-]{16,32}$/.test(id)) return null
-  return safeEqual(sig, sbSign(id)) ? id : null
-}
-
-export const sandboxIdFrom = (req: IncomingMessage) => verifySandboxToken(parseCookies(req.headers.cookie)[SB_COOKIE])
-export const sandboxCookie = (token: string, secure: boolean) => `${SB_COOKIE}=${token}; ${flags(secure)}; Max-Age=${SANDBOX_SESSION_SECONDS}`
-export const clearedSandboxCookie = (secure: boolean) => `${SB_COOKIE}=; ${flags(secure)}; Max-Age=0`
-
 // ---------- account sessions ----------
 const USER_COOKIE = 'ledgerly_user'
 export const USER_SESSION_SECONDS = 7 * 24 * 3600

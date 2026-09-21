@@ -1,6 +1,6 @@
 // Builds what the Vercel deployment needs, from src/ and web/app.html. Run: npm run build:vercel
 //  - lib/ledgerly-server.mjs : the server code bundled into one file (dependencies stay external)
-//  - web/demo.html, web/sandbox.html, web/me.html : copies of the dashboard page, one per address
+//  - web/me.html : a copy of the dashboard page for the signed-in account address
 import { build } from 'esbuild'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { options } from './bundle-options.mjs'

@@ -2,7 +2,7 @@ import { encodeFunctionData, erc20Abi, formatEther, formatUnits, getAddress, isA
 import { mainnetClient } from './chain.js'
 import { getPending, payeeSet, takePending, type PayRequest, type TradeRequest } from './approvals.js'
 import { config } from './config.js'
-import { dryRun, policy } from './mode.js'
+import { policy } from './mode.js'
 import { evaluate } from './guardrails.js'
 import { type LedgerEntry, readAll, record, spentToday } from './ledger.js'
 import { getQuote } from './market.js'
@@ -57,7 +57,7 @@ export const swapStep = (tokenIn: Address, tokenOut: Address, fee: number, recip
 })
 
 // ---------- helpers ----------
-export const signingAvailable = () => config.network === 'mainnet' && !dryRun()
+export const signingAvailable = () => config.live
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`
 const allowanceOf = (token: Address, owner: Address, spender: Address) =>
@@ -127,7 +127,7 @@ async function preparePayment(req: PayRequest, account: Address) {
 
 /** Build the transactions for a held action so the user's own wallet can sign them. Nothing is sent or consumed. */
 export async function prepareSigned(id: string, accountInput: unknown) {
-  if (!signingAvailable()) throw new Error('Signing with your wallet needs live mode on mainnet (DRY_RUN=false and LIVE_MAINNET=yes).')
+  if (!signingAvailable()) throw new Error('Signing with your wallet needs trading switched on (NETWORK=mainnet and LIVE_MAINNET=yes).')
   const account = parseAccount(accountInput)
   const p = getPending(id)
   if (!p) throw new Error('That action no longer exists or has expired.')
@@ -184,14 +184,14 @@ export async function completeSigned(id: string, accountInput: unknown, hashes: 
   }
   if (receipt.status !== 'success') {
     const { why: _why, ...base } = prep.entry
-    record({ ...base, verdict: 'needs_approval', executed: false, dryRun: false, txHash: mainHash, reasoning: `Signed by ${short(account)} but the transaction reverted on chain.` })
+    record({ ...base, verdict: 'needs_approval', executed: false, txHash: mainHash, reasoning: `Signed by ${short(account)} but the transaction reverted on chain.` })
     forget(id)
     throw new Error('The transaction reverted on chain. Nothing was bought or paid; only gas was used.')
   }
 
   takePending(id)
   const { why, ...entry } = prep.entry
-  record({ ...entry, verdict: 'needs_approval', executed: true, dryRun: false, txHash: mainHash, reasoning: `${why} Signed with the owner's wallet ${short(account)}.` })
+  record({ ...entry, verdict: 'needs_approval', executed: true, txHash: mainHash, reasoning: `${why} Signed with the owner's wallet ${short(account)}.` })
   forget(id)
   bumpVersion()
   return { status: 'executed', message: `Confirmed on chain. ${prep.entry.action}`, txHash: mainHash }

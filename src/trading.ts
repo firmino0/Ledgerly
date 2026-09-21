@@ -1,19 +1,18 @@
 import { formatUnits, parseUnits } from 'viem'
 import { addPending, type TradeRequest } from './approvals.js'
-import { config } from './config.js'
+import { config, tradingOffReason } from './config.js'
 import { allowLiveSells } from './accounts.js'
-import { dryRun, policy } from './mode.js'
+import { policy } from './mode.js'
 import { isUser } from './store.js'
 import { evaluate } from './guardrails.js'
 import { readAll, record, spentToday } from './ledger.js'
 import { getQuote, type Quote } from './market.js'
-import { paperBuy, paperSell, getPaper } from './paper.js'
 import { balanceOf, buyToken, quoteBuy, quoteSell, sellToken } from './swap.js'
 import { walletAddress } from './chain.js'
 import { bumpVersion } from './store.js'
 
 export interface TradeResult {
-  status: 'executed' | 'dry_run' | 'denied' | 'pending_approval' | 'skipped' | 'error'
+  status: 'executed' | 'denied' | 'pending_approval' | 'skipped' | 'error'
   message: string
   approvalId?: string
   amountUsd?: number
@@ -22,21 +21,16 @@ export interface TradeResult {
 }
 
 const log = (t: TradeRequest, verdict: 'allow' | 'needs_approval' | 'deny', action: string, executed: boolean, reasoning: string, txHash?: string) =>
-  record({ module: t.module, action, amountUsd: t.amountUsd, verdict, executed, dryRun: dryRun(), txHash, reasoning })
+  record({ module: t.module, action, amountUsd: t.amountUsd, verdict, executed, txHash, reasoning })
 
 async function execute(t: TradeRequest, q: Quote): Promise<TradeResult> {
-  if (isUser() && !dryRun()) throw new Error('Accounts sign their own transactions, so nothing is sent from the server. Use "Sign with my wallet".')
+  if (isUser()) throw new Error('Accounts sign their own transactions, so nothing is sent from the server. Use "Sign with my wallet".')
   const label = `${t.side === 'buy' ? 'Buy' : 'Sell'} ${t.symbol}`
   const contract = q.contract as `0x${string}`
 
   if (t.side === 'buy') {
     const route = await quoteBuy(contract, t.amountUsd, q.ask)
     const detail = `~${route.tokens.toFixed(6)} tokens via ${route.fee / 10_000}% pool @ $${route.impliedPriceUsd.toFixed(2)} (ask ${q.ask})`
-    if (dryRun()) {
-      paperBuy(t.symbol, t.amountUsd, route.tokens)
-      log(t, 'allow', `${label}: ${detail}`, true, t.why)
-      return { status: 'dry_run', amountUsd: t.amountUsd, tokens: route.tokens, message: `DRY RUN: would buy $${t.amountUsd} of ${t.symbol}, ${detail}.` }
-    }
     const { swapTx } = await buyToken(contract, t.amountUsd, route)
     log(t, 'allow', `${label}: ${detail}`, true, t.why, swapTx)
     return { status: 'executed', amountUsd: t.amountUsd, tokens: route.tokens, txHash: swapTx, message: `Bought $${t.amountUsd} of ${t.symbol}, ${detail}. tx ${swapTx}` }
@@ -46,8 +40,7 @@ async function execute(t: TradeRequest, q: Quote): Promise<TradeResult> {
   const wanted = t.amountUsd / q.mid
   let held: number
   const owner = walletAddress()
-  if (dryRun()) held = getPaper().holdings[t.symbol] ?? 0
-  else if (owner) held = Number(formatUnits(await balanceOf(contract, owner), 18))
+  if (owner) held = Number(formatUnits(await balanceOf(contract, owner), 18))
   else throw new Error('AGENT_PRIVATE_KEY is not set.')
   const tokens = Math.min(wanted, held)
   if (tokens <= 0) return { status: 'skipped', message: `Nothing to sell: no ${t.symbol} held.` }
@@ -56,11 +49,6 @@ async function execute(t: TradeRequest, q: Quote): Promise<TradeResult> {
   const amountIn = parseUnits(tokens.toFixed(18), 18)
   const route = await quoteSell(contract, amountIn, q.bid)
   const detail = `~${tokens.toFixed(6)} tokens for ~$${route.usdOut.toFixed(2)} via ${route.fee / 10_000}% pool @ $${route.impliedPriceUsd.toFixed(2)} (bid ${q.bid})`
-  if (dryRun()) {
-    paperSell(t.symbol, tokens, route.usdOut)
-    log(t, 'allow', `${label}: ${detail}`, true, t.why)
-    return { status: 'dry_run', amountUsd: usdEstimate, tokens, message: `DRY RUN: would sell ${detail}.` }
-  }
   const { swapTx } = await sellToken(contract, amountIn, route)
   log(t, 'allow', `${label}: ${detail}`, true, t.why, swapTx)
   return { status: 'executed', amountUsd: usdEstimate, tokens, txHash: swapTx, message: `Sold ${detail}. tx ${swapTx}` }
@@ -73,7 +61,8 @@ async function execute(t: TradeRequest, q: Quote): Promise<TradeResult> {
 export async function requestTrade(t: TradeRequest, opts: { approved?: boolean } = {}): Promise<TradeResult> {
   const label = `${t.side === 'buy' ? 'Buy' : 'Sell'} ${t.symbol}`
   try {
-    if (isUser() && !dryRun() && t.side === 'sell' && !allowLiveSells()) {
+    if (!config.live) return { status: 'denied', message: tradingOffReason ?? 'Trading is switched off.' }
+    if (isUser() && t.side === 'sell' && !allowLiveSells()) {
       log(t, 'deny', label, false, 'Live selling is not switched on for accounts yet.')
       return { status: 'denied', message: 'Live selling and rebalancing are not switched on for accounts yet. Buying is available.' }
     }
@@ -98,10 +87,6 @@ export async function requestTrade(t: TradeRequest, opts: { approved?: boolean }
       const p = addPending({ kind: 'trade', trade: t })
       log(t, 'needs_approval', label, false, `${verdict.reason} ${t.why}`)
       return { status: 'pending_approval', approvalId: p.id, amountUsd: t.amountUsd, message: `Held for approval (${verdict.reason}) id ${p.id}` }
-    }
-    if (!dryRun() && config.network !== 'mainnet') {
-      log(t, 'allow', label, false, 'Live swaps need NETWORK=mainnet; nothing was traded.')
-      return { status: 'error', message: 'Live swaps need NETWORK=mainnet.' }
     }
     const result = await execute(t, q)
     bumpVersion()

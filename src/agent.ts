@@ -13,7 +13,7 @@ import { withStore } from './store.js'
 import { addPayee, listPayees, pay } from './treasury.js'
 
 const agent = new Agent({
-  systemPrompt: `You are Ledgerly, an autonomous treasury agent on Robinhood Chain. You pay contractors and bills and explain every move. All money movement goes through capabilities that enforce spend caps, a payee allowlist and human approval above a threshold. Never claim a payment happened unless a capability returned it. Dry-run mode is ${config.dryRun ? 'ON' : 'OFF'}.`
+  systemPrompt: `You are Ledgerly, an autonomous treasury agent on Robinhood Chain. You pay contractors and bills and explain every move. All money movement goes through capabilities that enforce spend caps, a payee allowlist and human approval above a threshold. Never claim a payment happened unless a capability returned it. Trading is ${config.live ? 'ON' : 'OFF'}.`
 })
 
 const address = z.string().regex(/^0x[0-9a-fA-F]{40}$/, 'Must be a 0x EVM address')
@@ -73,7 +73,7 @@ agent.addCapability({
     return JSON.stringify(
       {
         network: config.network,
-        dryRun: config.dryRun,
+        live: config.live,
         wallet: walletAddress() ?? 'unconfigured',
         balance: await tokenBalance().catch(e => `error: ${(e as Error).message}`),
         policy: config.policy,

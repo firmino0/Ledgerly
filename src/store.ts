@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 export interface Backend {
   name: string
   load(keys: string[]): Promise<Record<string, unknown>>
-  /** ttlSeconds makes the saved keys expire (used for throwaway sandbox data). */
+  /** ttlSeconds optionally makes the saved keys expire. */
   save(entries: Record<string, unknown>, ttlSeconds?: number): Promise<void>
   /** Returns a release function, or null if the named lock is taken. */
   lock(name: string, ttlMs: number): Promise<(() => Promise<void>) | null>
@@ -28,7 +28,7 @@ export interface Backend {
 }
 
 const PREFIX = 'ledgerly:'
-export const STORE_KEYS = ['state.json', 'paper.json', 'portfolio.json', 'dca.json', 'ledger.json', 'prepared.json', 'profile.json']
+export const STORE_KEYS = ['state.json', 'portfolio.json', 'dca.json', 'ledger.json', 'prepared.json', 'profile.json']
 
 /** In-process backend for tests and for trying hosted mode locally (LEDGERLY_STORE=memory). Not shared between processes. */
 export function memoryBackend(): Backend {
@@ -131,13 +131,13 @@ export function setBackendForTests(b: Backend | null) {
 }
 
 // ---------- per-request context (remote mode) ----------
-/** Who a request works for, beyond the owner: a throwaway sandbox visitor, or a signed-in account. Each gets private data. */
+/** Who a request works for, beyond the owner: a signed-in account. Each gets private data. */
 export interface Tenant {
-  kind: 'sandbox' | 'user'
+  kind: 'user'
   id: string
 }
 
-const tenantPrefix = (t?: Tenant) => PREFIX + (t ? (t.kind === 'sandbox' ? `sb:${t.id}:` : `u:${t.id}:`) : '')
+const tenantPrefix = (t?: Tenant) => PREFIX + (t ? `u:${t.id}:` : '')
 
 interface Ctx {
   cache: Map<string, unknown>
@@ -154,10 +154,6 @@ function ctx(): Ctx {
   return c
 }
 
-/** Sandbox data is throwaway: it expires by itself. */
-const SANDBOX_TTL_SECONDS = 48 * 3600
-
-export const isSandbox = () => als.getStore()?.tenant?.kind === 'sandbox'
 export const isUser = () => als.getStore()?.tenant?.kind === 'user'
 export const currentTenant = () => als.getStore()?.tenant
 
@@ -165,7 +161,7 @@ async function flush(c: Ctx) {
   if (!backend || !c.dirty.size) return
   const entries: Record<string, unknown> = {}
   for (const k of c.dirty) entries[k] = c.cache.get(k)
-  await backend.save(entries, c.tenant?.kind === 'sandbox' ? SANDBOX_TTL_SECONDS : undefined)
+  await backend.save(entries)
   c.dirty.clear()
 }
 
@@ -185,7 +181,7 @@ async function acquire(name: string): Promise<() => Promise<void>> {
  */
 export async function withStore<T>(fn: () => Promise<T>, opts: { lock?: boolean; tenant?: Tenant } = {}): Promise<T> {
   if (!backend) {
-    if (opts.tenant) throw new Error('Sandboxes and accounts need the hosted (Redis) store so each person stays separate.')
+    if (opts.tenant) throw new Error('Accounts need the hosted (Redis) store so each person stays separate.')
     return fn()
   }
   const prefix = tenantPrefix(opts.tenant)

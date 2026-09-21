@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 const norm = (s: string) => s.replace(/\r\n/g, '\n')
 
 // Each dashboard address needs a real file on the host. They are generated from web/app.html; this fails if one is stale.
-test('web/demo.html, sandbox.html and me.html match web/app.html', async () => {
+test('web/me.html match web/app.html', async () => {
   const { PAGES, renderPage } = (await import(pathToFileURL('scripts/pages.mjs').href)) as {
     PAGES: Record<string, string>
     renderPage: (html: string, title: string) => string

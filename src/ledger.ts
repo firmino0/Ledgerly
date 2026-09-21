@@ -10,7 +10,8 @@ export interface LedgerEntry {
   to?: string
   verdict: 'allow' | 'needs_approval' | 'deny'
   executed: boolean
-  dryRun: boolean
+  /** Only on old entries from when simulation existed. Nothing writes it any more, and it never counts as spend. */
+  dryRun?: boolean
   txHash?: string
   reasoning: string
 }
@@ -40,8 +41,8 @@ export function readAll(file: string = DEFAULT_FILE): LedgerEntry[] {
     .map(l => JSON.parse(l) as LedgerEntry)
 }
 
-/** Executed spend (dry-run included, so demos exercise the caps) for the current UTC day. */
+/** Real executed spend for the current UTC day. */
 export function spentToday(entries: LedgerEntry[], now = new Date()): number {
   const day = now.toISOString().slice(0, 10)
-  return entries.filter(e => e.executed && e.ts.startsWith(day)).reduce((s, e) => s + (e.amountUsd ?? 0), 0)
+  return entries.filter(e => e.executed && !e.dryRun && e.ts.startsWith(day)).reduce((s, e) => s + (e.amountUsd ?? 0), 0)
 }

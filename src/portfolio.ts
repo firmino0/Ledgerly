@@ -1,11 +1,9 @@
 import { formatUnits } from 'viem'
 import { walletAddress } from './chain.js'
 import { config } from './config.js'
-import { dryRun } from './mode.js'
 import { isUser } from './store.js'
 import { record } from './ledger.js'
 import { getQuote } from './market.js'
-import { getPaper } from './paper.js'
 import { explain } from './reasoning.js'
 import { bumpVersion, dataPath, getVersion, isRemote, readJson, writeJson } from './store.js'
 import { ADDR, balanceOf } from './swap.js'
@@ -103,21 +101,15 @@ export function planRebalance(holdingsUsd: Record<string, number>, cashUsd: numb
 }
 
 export interface Snapshot {
-  source: 'paper' | 'onchain'
+  source: 'onchain'
   holdingsUsd: Record<string, number>
   cashUsd: number
 }
 
-/** Current holdings valued at live mid prices. Dry-run uses the simulated portfolio; live reads the wallet. */
+/** Current holdings valued at live mid prices, read from the wallet. */
 export async function snapshot(symbols: string[]): Promise<Snapshot> {
   const quotes = await Promise.all(symbols.map(s => getQuote(s)))
   const holdingsUsd: Record<string, number> = {}
-
-  if (dryRun()) {
-    const paper = getPaper()
-    quotes.forEach(q => (holdingsUsd[q.symbol] = (paper.holdings[q.symbol] ?? 0) * q.mid))
-    return { source: 'paper', holdingsUsd, cashUsd: paper.cashUsd }
-  }
 
   const owner = walletAddress()
   if (!owner) throw new Error(isUser() ? 'Connect your wallet on the dashboard to see your live portfolio.' : 'AGENT_PRIVATE_KEY is not set, so the wallet cannot be read.')
@@ -135,7 +127,7 @@ let viewCache: { at: number; version: number; value: unknown } | null = null
 export async function portfolioView() {
   const cfg = getPortfolioConfig()
   const symbols = Object.keys(cfg.targets)
-  if (!symbols.length) return { cfg, source: dryRun() ? 'paper' : 'onchain', plan: null as Plan | null }
+  if (!symbols.length) return { cfg, source: 'onchain', plan: null as Plan | null }
   // The short cache is per process, so it is skipped when hosted (another instance may have changed the balances).
   if (!isRemote() && viewCache && viewCache.version === getVersion() && Date.now() - viewCache.at < 20_000) return viewCache.value as { cfg: PortfolioConfig; source: string; plan: Plan }
   const snap = await snapshot(symbols)
@@ -162,7 +154,7 @@ export async function runRebalance(): Promise<RebalanceResult> {
 
   if (!plan.trades.length) {
     const msg = `Portfolio is within ${cfg.driftThresholdPct} points of target. No trades needed.`
-    record({ module: 'rebalance', action: 'Rebalance check', verdict: 'allow', executed: false, dryRun: dryRun(), reasoning: msg })
+    record({ module: 'rebalance', action: 'Rebalance check', verdict: 'allow', executed: false, reasoning: msg })
     return { message: msg, plan, results: [] }
   }
 

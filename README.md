@@ -13,7 +13,7 @@ Giving an AI agent a wallet is risky. Ledgerly is built around one rule: **the m
 - **Spend caps:** a per-transaction cap and a daily cap.
 - **Payee allowlist:** payments to an address that was not registered first are always denied.
 - **Human approval:** anything above a threshold is held until you approve it. Approvals expire after 24 hours, and the caps are re-checked when you approve.
-- **Dry run by default:** nothing touches real money unless you turn it on deliberately. Going live on mainnet needs two separate settings.
+- **Live only:** everything is real, on Robinhood Chain mainnet. There is no simulation mode. Trading needs two separate settings (`NETWORK=mainnet` and `LIVE_MAINNET=yes`); without them Ledgerly refuses to trade.
 - **A record of every decision:** each action is logged with the model's plain-English reasoning.
 
 ## What it does
@@ -45,7 +45,7 @@ Every buy, sell and payment goes through **one path** in the code, so the guardr
                         |
               [ guardrails.ts ]              <- caps, allowlist, approval (plain code)
                         |
-       dry run: paper portfolio  |  live: Uniswap v3 on Robinhood Chain
+       Uniswap v3 on Robinhood Chain (mainnet)
                         |
                   [ ledger.ts ]              <- every decision + reasoning
 ```
@@ -59,13 +59,13 @@ Two parts, served by the same small Node server, with no framework and no build 
 | Path | What it is |
 |---|---|
 | `/` | The website: what Ledgerly is, how a decision is made, the rules, and what has and hasn't been proven. It is fully static and can be hosted on its own. |
-| `/app` | The dashboard: Overview, Portfolio, DCA, Payments and Ledger, with an always-visible banner that says whether the app is in dry run or live. |
+| `/app` | The dashboard: Overview, Portfolio, DCA, Payments and Ledger, with an always-visible banner that says whether trading is on. |
 
 Files live in `web/`. Design tokens are in `web/assets/tokens.css` (light and dark), and the fonts are served locally from `web/assets/fonts`.
 
 **Hosting on Vercel.** The website and the dashboard can both be hosted. Hosted mode adds a password login, keeps state in Upstash Redis instead of local files, and runs the DCA timer through a secured cron endpoint. See [DEPLOY.md](DEPLOY.md). Running it on your own computer is unchanged and needs no login.
 
-Other people can try it in three ways, each switched off unless you enable it: a read-only **demo** with sample data (`/demo`), a private simulated **sandbox** for each visitor (`/sandbox`), and real **accounts** (`/account`) where each person signs every transaction with their own wallet. Accounts have no server-side key, so the owner's wallet can never be reached from them.
+Other people can use it through real **accounts** (`/account`, off unless you enable it), where each person signs every transaction with their own wallet. Accounts have no server-side key, so the owner's wallet can never be reached from them.
 
 Design notes: the look is a printed ledger (warm paper, one green accent, a serif for headings, monospace tabular figures, thin rules instead of shadowed cards). All text is inserted as text nodes rather than HTML, and the server sends a strict Content-Security-Policy with no inline scripts or styles. Approving a held action while in live mode asks for a browser confirmation first.
 
@@ -84,9 +84,9 @@ Edit `.env` and set at least `SERV_API_KEY` (the SERV Reasoning key from console
 npm run dashboard
 ```
 
-Open http://localhost:3000 for the website and http://localhost:3000/app for the dashboard. In dry-run mode you can try everything with a simulated portfolio and real prices, with no wallet or funds.
+Open http://localhost:3000 for the website and http://localhost:3000/app for the dashboard. Everything is live, so fund the wallet with a small amount first.
 
-Try this: set targets `NVDA 40, AAPL 30`, reset the paper portfolio to $100, press **Rebalance now**, and approve the held trades.
+Try this with a few dollars: set targets `NVDA 40, AAPL 30`, press **Rebalance now**, and approve the held trades.
 
 ### Commands
 
@@ -120,23 +120,22 @@ Live mode moves real funds. Use a **fresh throwaway wallet** and start with a fe
 2. Fund it with a little ETH for gas and a few dollars of USDG.
 3. Run `npm run preflight` until it says Ready.
 4. Lower the caps for the first run, for example `MAX_PER_TX=5`, `MAX_PER_DAY=10`, `APPROVAL_THRESHOLD=3`.
-5. Set `DRY_RUN=false` **and** `LIVE_MAINNET=yes`. Without the second setting, Ledgerly stays in dry-run mode.
+5. Set `LIVE_MAINNET=yes`. Without it (or with `DRY_RUN=true`), Ledgerly refuses to trade.
 
 ## Configuration
 
-See `.env.example`. Main settings: `SERV_API_KEY`, `SERV_MODEL`, `NETWORK`, `DRY_RUN`, `LIVE_MAINNET`, `MAX_PER_TX`, `MAX_PER_DAY`, `APPROVAL_THRESHOLD`, `SLIPPAGE_BPS`.
+See `.env.example`. Main settings: `SERV_API_KEY`, `SERV_MODEL`, `NETWORK`, `LIVE_MAINNET`, `MAX_PER_TX`, `MAX_PER_DAY`, `APPROVAL_THRESHOLD`, `SLIPPAGE_BPS`.
 
 ## Status and honest limits
 
-**Tested:** guardrails, rebalancing math, swap route selection, wallet transaction data, DCA decision parsing and the MCP read-only filter (77 unit tests); live SERV Reasoning calls; live Robinhood price API; live onchain quotes on mainnet; the dashboard end to end in dry-run mode, including approvals and restart persistence; and three live mainnet transactions, all confirmed on Robinhood Chain: a $0.50 NVDA buy signed with a connected wallet (`0xf353df4d5b9a925ea02399237bc6badf7d5ac75e41088ea104a6083dc2b9dfe1`), a $0.50 NVDA DCA buy sent by the agent wallet (`0xfea991d5425612b143af50a78677f64c1381e960b3de2f36bda7f8f19ff93088`), and a $0.20 USDG payment (`0xb342bac44a45e0eadacf90f50184efccf6604d9a283499df0172b728877a953e`).
+**Tested:** guardrails, rebalancing math, swap route selection, wallet transaction data, DCA decision parsing and the MCP read-only filter (68 unit tests); live SERV Reasoning calls; live Robinhood price API; live onchain quotes on mainnet; the dashboard end to end, including approvals and restart persistence; and three live mainnet transactions, all confirmed on Robinhood Chain: a $0.50 NVDA buy signed with a connected wallet (`0xf353df4d5b9a925ea02399237bc6badf7d5ac75e41088ea104a6083dc2b9dfe1`), a $0.50 NVDA DCA buy sent by the agent wallet (`0xfea991d5425612b143af50a78677f64c1381e960b3de2f36bda7f8f19ff93088`), and a $0.20 USDG payment (`0xb342bac44a45e0eadacf90f50184efccf6604d9a283499df0172b728877a953e`).
 
-**Not yet run with real funds:** live sells and live rebalancing. The code is written and the dry-run path exercises the same quoting, but only buys and one payment have run on mainnet. Treat the next live run of those as a test.
+**Not yet run with real funds:** live sells and live rebalancing. The code is written, but only buys and one payment have run on mainnet. Treat the next live run of those as a test.
 
 **Robinhood MCP:** the connector is unverified with a real login. Robinhood's sign-in is an OAuth flow in a desktop browser, so a token has to be supplied as `ROBINHOOD_MCP_TOKEN`. It is off by default and read-only.
 
 **Simplifications:**
 - Holdings are valued at the mid price and ignore Robinhood's small share multiplier (about 0.1%).
-- Dry-run trades count toward the daily cap, so long demos may need a higher `MAX_PER_DAY`.
 - Locally the dashboard listens on localhost only and has no login. Hosted, it is protected by a single shared password (one user, not a multi-user system).
 
 ## Security notes

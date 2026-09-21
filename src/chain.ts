@@ -1,7 +1,7 @@
 import { createPublicClient, createWalletClient, defineChain, erc20Abi, http, parseUnits } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { config } from './config.js'
-import { dataPath, isSandbox, isUser, readJson } from './store.js'
+import { dataPath, isUser, readJson } from './store.js'
 
 const rhTestnet = defineChain({
   id: 46630,
@@ -27,13 +27,12 @@ export const publicClient = createPublicClient({ chain, transport: http() })
 export const mainnetClient = createPublicClient({ chain: rhMainnet, transport: http() })
 
 export function walletClient() {
-  if (isSandbox() || isUser()) throw new Error('Only the owner has a server-side wallet. Accounts sign with their own wallet.')
+  if (isUser()) throw new Error('Only the owner has a server-side wallet. Accounts sign with their own wallet.')
   if (!config.privateKey) throw new Error('AGENT_PRIVATE_KEY is not set.')
   return createWalletClient({ account: privateKeyToAccount(config.privateKey), chain, transport: http() })
 }
 
 export function walletAddress(): `0x${string}` | undefined {
-  if (isSandbox()) return undefined
   // An account's wallet is the address it linked, used only to read balances. Nothing is ever sent from it.
   if (isUser()) return readJson<{ wallet?: `0x${string}` }>(dataPath('profile.json'), {}).wallet
   return config.privateKey ? privateKeyToAccount(config.privateKey).address : undefined
@@ -51,9 +50,9 @@ export async function tokenBalance(): Promise<string> {
   return (Number(raw) / 10 ** config.paymentDecimals).toString()
 }
 
-/** Send the payment token. Only called after the guardrails allow it and dry-run is off. */
+/** Send the payment token. Only called after the guardrails allow it and trading is switched on. */
 export async function sendPayment(to: `0x${string}`, amountUsd: number): Promise<`0x${string}`> {
-  if (isSandbox() || isUser()) throw new Error('Only the owner has a server-side wallet. Accounts sign with their own wallet.')
+  if (isUser()) throw new Error('Only the owner has a server-side wallet. Accounts sign with their own wallet.')
   if (!config.privateKey || !config.paymentToken) {
     throw new Error('AGENT_PRIVATE_KEY and PAYMENT_TOKEN_ADDRESS must be set for live payments.')
   }

@@ -7,11 +7,11 @@ const backend = memoryBackend()
 before(() => setBackendForTests(backend))
 after(() => setBackendForTests(null))
 
-const entry = (action: string): Omit<LedgerEntry, 'ts'> => ({ module: 'dca', action, verdict: 'allow', executed: true, dryRun: true, reasoning: 'x' })
+const entry = (action: string): Omit<LedgerEntry, 'ts'> => ({ module: 'dca', action, verdict: 'allow', executed: true, reasoning: 'x' })
 
 test('changes made inside a request are saved and visible to the next request', async () => {
-  await withStore(async () => writeJson(dataPath('dca.json'), [{ id: 'a' }]), { lock: true })
-  const seen = await withStore(async () => readJson<unknown[]>(dataPath('dca.json'), []))
+  await withStore(async () => writeJson(dataPath('state.json'), [{ id: 'a' }]), { lock: true })
+  const seen = await withStore(async () => readJson<unknown[]>(dataPath('state.json'), []))
   assert.deepEqual(seen, [{ id: 'a' }])
 })
 
@@ -28,12 +28,12 @@ test('the ledger appends across requests and keeps order', async () => {
 
 test('concurrent requests never overwrite each other (lock)', async () => {
   const work = (n: number) => withStore(async () => {
-    const cur = readJson<number[]>(dataPath('paper.json'), [])
+    const cur = readJson<number[]>(dataPath('portfolio.json'), [])
     await new Promise(r => setTimeout(r, 15))
-    writeJson(dataPath('paper.json'), [...cur, n])
+    writeJson(dataPath('portfolio.json'), [...cur, n])
   }, { lock: true })
   await Promise.all([1, 2, 3, 4].map(work))
-  const final = await withStore(async () => readJson<number[]>(dataPath('paper.json'), []))
+  const final = await withStore(async () => readJson<number[]>(dataPath('portfolio.json'), []))
   assert.deepEqual([...final].sort(), [1, 2, 3, 4])
 })
 

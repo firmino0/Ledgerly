@@ -1,4 +1,4 @@
-// Standalone dashboard (no OpenServ connection needed). Handy for demos and local testing.
+// Standalone dashboard (no OpenServ connection needed). Handy for running it on your own machine.
 import { runDue } from './dca.js'
 import { startDashboard } from './dashboard.js'
 import { withStore } from './store.js'

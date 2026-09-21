@@ -1,7 +1,7 @@
 // Read-only readiness check for Robinhood Chain mainnet. Sends no transactions and never prints the private key.
 import { erc20Abi, formatEther, formatUnits } from 'viem'
 import { mainnetClient, walletAddress } from './chain.js'
-import { config, liveBlockedReason } from './config.js'
+import { config, tradingOffReason } from './config.js'
 import { getQuote } from './market.js'
 import { ADDR, quoteBuy } from './swap.js'
 
@@ -13,8 +13,8 @@ const bad = (msg: string) => {
 }
 const note = (msg: string) => console.log(`  [note] ${msg}`)
 
-console.log(`\nLedgerly preflight (${config.network}, ${config.dryRun ? 'DRY RUN' : 'LIVE'})\n`)
-if (liveBlockedReason) note(liveBlockedReason)
+console.log(`\nLedgerly preflight (${config.network}, trading ${config.live ? 'ON' : 'OFF'})\n`)
+if (tradingOffReason) note(tradingOffReason)
 if (config.network !== 'mainnet') note('NETWORK is not "mainnet". Stock tokens and Uniswap exist only on mainnet (4663).')
 
 console.log('Chain and contracts')
@@ -44,7 +44,7 @@ try {
 console.log('\nWallet')
 const wallet = walletAddress()
 if (!wallet) {
-  note('AGENT_PRIVATE_KEY is not set. Fine for dry runs. Live payments and swaps need a funded throwaway wallet.')
+  note('AGENT_PRIVATE_KEY is not set. Payments and swaps from the owner dashboard need a funded throwaway wallet. Accounts sign with their own wallets.')
 } else {
   ok(`Wallet ${wallet}`)
   try {
@@ -61,5 +61,5 @@ console.log('\nGuardrails')
 ok(`Max per transaction $${config.policy.maxPerTx}, max per day $${config.policy.maxPerDay}, approval above $${config.policy.approvalThreshold}, slippage ${config.slippageBps / 100}%`)
 config.servApiKey ? ok(`SERV Reasoning key set, model ${config.servModel}`) : note('SERV_API_KEY not set. Decisions fall back to plain scheduled buys.')
 
-console.log(problems ? `\n${problems} problem(s) to fix before going live.\n` : '\nReady. Start live mode with a tiny amount first (see .env: DRY_RUN=false and LIVE_MAINNET=yes).\n')
+console.log(problems ? `\n${problems} problem(s) to fix before going live.\n` : '\nReady. Everything is real, so start with a tiny amount. Trading is switched on with LIVE_MAINNET=yes.\n')
 process.exit(problems ? 1 : 0)

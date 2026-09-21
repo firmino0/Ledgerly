@@ -39,9 +39,7 @@ export const USER_ALLOWED = new Set([
   'POST /api/pay',
   'POST /api/portfolio/targets',
   'POST /api/portfolio/rebalance',
-  'POST /api/paper/reset',
   'POST /api/reject',
-  'POST /api/approve', // paper mode only; live approval is signing (approveAny refuses otherwise)
   'POST /api/wallet/prepare',
   'POST /api/wallet/complete',
   'POST /api/account/wallet'

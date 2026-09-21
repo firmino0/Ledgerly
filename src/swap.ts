@@ -78,7 +78,7 @@ export async function quoteBuy(tokenOut: `0x${string}`, amountUsd: number, refPr
 
 /**
  * Live buy: approve the exact USDG amount to SwapRouter02, then exactInputSingle with a minimum output.
- * Only called after guardrails allow it and DRY_RUN=false on mainnet.
+ * Only called after guardrails allow it and trading is switched on.
  */
 export async function buyToken(
   tokenOut: `0x${string}`,

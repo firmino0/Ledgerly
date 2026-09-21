@@ -1,7 +1,5 @@
 import OpenAI from 'openai'
 import { config } from './config.js'
-import { modelBudgetOk } from './sandbox.js'
-import { isSandbox } from './store.js'
 
 const client = new OpenAI({
   apiKey: config.servApiKey || 'missing',
@@ -48,10 +46,6 @@ function servTools(shadowHint?: string): OpenAI.Chat.Completions.ChatCompletionT
 /** Raw SERV Reasoning call. Returns null when no key is set or the API fails (see `lastError`). */
 export async function ask(system: string, user: string, opts: AskOptions = {}): Promise<string | null> {
   if (!config.servApiKey) return null
-  if (isSandbox() && !(await modelBudgetOk())) {
-    lastError = 'this sandbox has used its share of model calls, so the plain rules ran instead'
-    return null
-  }
   try {
     const res = await client.chat.completions.create({
       model: config.servModel,

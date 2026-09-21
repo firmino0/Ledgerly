@@ -191,8 +191,6 @@ details.more .full { white-space: pre-line; }
   #wallet-btn { max-width: 118px; overflow: hidden; text-overflow: ellipsis; }
 }
 
-/* demo and sandbox */
-.banner.demo { background: var(--accent-wash); color: var(--accent); }
 .banner a.btn { text-decoration: none; }
 .intro { max-width: 62ch; }
 .intro-list { margin: 0 0 26px; padding-left: 20px; display: grid; gap: 10px; color: var(--ink-2); }

@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { config } from './config.js'
-import { dryRun } from './mode.js'
 import { record } from './ledger.js'
 import { getQuote, type Quote } from './market.js'
 import { ask } from './reasoning.js'
@@ -27,7 +26,7 @@ export interface DcaDecision {
 export interface DcaRunResult {
   planId: string
   symbol: string
-  outcome: 'bought_dry_run' | 'bought_live' | 'skipped' | 'denied' | 'pending_approval' | 'live_not_configured' | 'error'
+  outcome: 'bought_live' | 'skipped' | 'denied' | 'pending_approval' | 'error'
   amountUsd?: number
   estTokens?: number
   txHash?: string
@@ -111,7 +110,7 @@ async function decide(plan: DcaPlan, q: Quote): Promise<DcaDecision> {
 export async function runPlan(plan: DcaPlan, now = new Date()): Promise<DcaRunResult> {
   const base = { planId: plan.id, symbol: plan.symbol }
   const skip = (reasoning: string) =>
-    record({ module: 'dca', action: `Skip ${plan.symbol}`, verdict: 'allow', executed: false, dryRun: dryRun(), reasoning })
+    record({ module: 'dca', action: `Skip ${plan.symbol}`, verdict: 'allow', executed: false, reasoning })
 
   try {
     const q = await getQuote(plan.symbol)
@@ -129,8 +128,8 @@ export async function runPlan(plan: DcaPlan, now = new Date()): Promise<DcaRunRe
     const amountUsd = Math.round(plan.amountUsd * d.multiplier * 100) / 100
     const r = await requestTrade({ side: 'buy', symbol: plan.symbol, amountUsd, module: 'dca', why: `${d.why} [${d.source}, x${d.multiplier}]` })
     const outcome: DcaRunResult['outcome'] =
-      r.status === 'dry_run' ? 'bought_dry_run' : r.status === 'executed' ? 'bought_live' : r.status === 'pending_approval' ? 'pending_approval' : r.status === 'denied' ? 'denied' : r.status === 'skipped' ? 'skipped' : 'error'
-    return { ...base, outcome, amountUsd, estTokens: r.tokens, txHash: r.txHash, approvalId: r.approvalId, message: `${r.message} ${r.status === 'dry_run' || r.status === 'executed' ? d.why : ''}`.trim() }
+      r.status === 'executed' ? 'bought_live' : r.status === 'pending_approval' ? 'pending_approval' : r.status === 'denied' ? 'denied' : r.status === 'skipped' ? 'skipped' : 'error'
+    return { ...base, outcome, amountUsd, estTokens: r.tokens, txHash: r.txHash, approvalId: r.approvalId, message: `${r.message} ${r.status === 'executed' ? d.why : ''}`.trim() }
   } catch (err) {
     const msg = (err as Error).message
     skip(`Error: ${msg}`)
