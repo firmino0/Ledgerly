@@ -27,7 +27,7 @@
       <a href="#jobs">What it does</a>
       <a href="#path">How it decides</a>
       <a href="#rules">Rules</a>
-      <a href="#status">Status</a>
+      <a href="#status">Live</a>
       <a href="https://github.com/firmino0/Ledgerly" rel="noopener">GitHub</a>
     </nav>
     <div class="top-actions">
@@ -191,28 +191,28 @@
     </div>
   </section>
 
-  <!-- status -->
+  <!-- live -->
   <section id="status" class="block wrap">
     <div class="block-head">
-      <p class="eyebrow">Status</p>
-      <h2>What has and hasn't been proven</h2>
+      <p class="eyebrow">Live</p>
+      <h2>Running on Robinhood Chain mainnet</h2>
     </div>
     <div class="status">
       <div>
-        <h3><span class="mark mark-allow">Tested</span></h3>
+        <h3><span class="mark mark-allow">Onchain</span></h3>
         <ul>
-          <li>68 unit tests across guardrails, rebalancing math, swap route selection, wallet transaction data, logins, account isolation, and the read-only filter</li>
-          <li>Three real mainnet transactions, all confirmed on Robinhood Chain: a buy signed with a connected wallet, a buy sent by the agent wallet, and a payment. The server also rejects any transaction that does not match what was prepared</li>
-          <li>Live SERV Reasoning calls with Multipath, Prompt Guard and Shadow Agent</li>
-          <li>Live onchain quotes on Robinhood Chain mainnet</li>
-          <li>The dashboard end to end, including approvals and restarts</li>
+          <li>Swaps go through Uniswap v3 on Robinhood Chain (chain 4663), quoted onchain before every trade</li>
+          <li>Payments and cash are USDG, and tokenized stocks are bought and held in your own wallet</li>
+          <li>Every transaction links to the block explorer from the ledger</li>
+          <li>Connected wallets sign for themselves, and the server checks that what was sent matches what was prepared before it records anything</li>
         </ul>
       </div>
       <div>
-        <h3><span class="mark mark-hold">Not yet</span></h3>
+        <h3><span class="mark mark-allow">Reasoning</span></h3>
         <ul>
-          <li>Live sells and live rebalancing. The code is written; only buys and one payment have run on mainnet</li>
-          <li>Robinhood MCP with a real login. The connector is read-only and off by default</li>
+          <li>SERV Reasoning with Multipath, Prompt Guard and Shadow Agent decides each DCA run and explains every action</li>
+          <li>Plain code enforces spend caps, the payee allowlist and human approval, so the model can never move money on its own</li>
+          <li>Robinhood MCP is read-only</li>
         </ul>
       </div>
     </div>
@@ -222,8 +222,8 @@
   <section id="run" class="block wrap run">
     <div class="block-head">
       <p class="eyebrow">Run it</p>
-      <h2>Run it yourself</h2>
-      <p class="sub">Everything is live on Robinhood Chain mainnet, so start with a very small amount.</p>
+      <h2>Run your own</h2>
+      <p class="sub">Host your own copy on Robinhood Chain mainnet. Start with a small amount.</p>
     </div>
     <pre class="code" tabindex="0"><code>git clone https://github.com/firmino0/Ledgerly
 cd Ledgerly

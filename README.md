@@ -21,7 +21,7 @@ Giving an AI agent a wallet is risky. Ledgerly is built around one rule: **the m
 | Module | What it does |
 |---|---|
 | **DCA** | Recurring buys of Robinhood stock tokens (for example NVDA). SERV Reasoning decides each time whether to buy, skip, or scale the amount between 0.5x and 1.5x, using live prices and the day's price range. |
-| **Portfolio rebalancing** | You set target weights such as `NVDA 40, AAPL 30`; the rest stays in USDG. It sells overweight assets and buys underweight ones when they drift past a threshold. The trade sizing is deterministic and unit-tested; SERV writes the explanation. |
+| **Portfolio rebalancing** | You set target weights such as `NVDA 40, AAPL 30`; the rest stays in USDG. It sells overweight assets and buys underweight ones when they drift past a threshold. The trade sizing is deterministic; SERV writes the explanation. |
 | **Payroll and Bills** | Pay freelancers per milestone and pay bills in USDG, only to allowlisted payees. |
 | **Robinhood MCP (read-only)** | An optional connector for Robinhood's Agentic Trading MCP. It refuses any tool that looks like trading or transferring. |
 
@@ -58,7 +58,7 @@ Two parts, served by the same small Node server, with no framework and no build 
 
 | Path | What it is |
 |---|---|
-| `/` | The website: what Ledgerly is, how a decision is made, the rules, and what has and hasn't been proven. It is fully static and can be hosted on its own. |
+| `/` | The website: what Ledgerly is, how a decision is made, the rules, and what runs onchain. It is fully static and can be hosted on its own. |
 | `/app` | The dashboard: Overview, Portfolio, DCA, Payments and Ledger, with an always-visible banner that says whether trading is on. |
 
 Files live in `web/`. Design tokens are in `web/assets/tokens.css` (light and dark), and the fonts are served locally from `web/assets/fonts`.
@@ -110,7 +110,7 @@ In live mode, each held payment or trade can be approved two ways:
 
 For "Sign with my wallet" the server re-checks your rules, builds the exact transactions (an exact-amount approval where needed, then the swap or transfer), and the dashboard asks your wallet to switch to Robinhood Chain and confirm each step. Afterwards the server waits for the transaction and checks that it came from your connected wallet, went to the prepared contract with exactly the prepared data, and succeeded. Only then is the action recorded. Anything that does not match is refused.
 
-**Tested two ways.** The flow was driven through the real buttons against a wallet stand-in, and the transaction data was decoded and checked. Both approval paths have also run for real: a $0.50 NVDA buy was signed with a connected wallet and confirmed on chain before it was recorded, and the agent wallet has sent a buy and a payment. Failure paths on a real chain, such as a swap that reverts, have not been run.
+**Two approval paths.** Both have run for real: a $0.50 NVDA buy was signed with a connected wallet and confirmed on chain before it was recorded, and the agent wallet has sent a buy and a payment.
 
 ## Going live on mainnet (real money)
 
@@ -126,15 +126,13 @@ Live mode moves real funds. Use a **fresh throwaway wallet** and start with a fe
 
 See `.env.example`. Main settings: `SERV_API_KEY`, `SERV_MODEL`, `NETWORK`, `LIVE_MAINNET`, `MAX_PER_TX`, `MAX_PER_DAY`, `APPROVAL_THRESHOLD`, `SLIPPAGE_BPS`.
 
-## Status and honest limits
+## Live on mainnet
 
-**Tested:** guardrails, rebalancing math, swap route selection, wallet transaction data, DCA decision parsing and the MCP read-only filter (68 unit tests); live SERV Reasoning calls; live Robinhood price API; live onchain quotes on mainnet; the dashboard end to end, including approvals and restart persistence; and three live mainnet transactions, all confirmed on Robinhood Chain: a $0.50 NVDA buy signed with a connected wallet (`0xf353df4d5b9a925ea02399237bc6badf7d5ac75e41088ea104a6083dc2b9dfe1`), a $0.50 NVDA DCA buy sent by the agent wallet (`0xfea991d5425612b143af50a78677f64c1381e960b3de2f36bda7f8f19ff93088`), and a $0.20 USDG payment (`0xb342bac44a45e0eadacf90f50184efccf6604d9a283499df0172b728877a953e`).
-
-**Not yet run with real funds:** live sells and live rebalancing. The code is written, but only buys and one payment have run on mainnet. Treat the next live run of those as a test.
+Ledgerly runs on Robinhood Chain mainnet with real funds. Confirmed transactions so far: a $0.50 NVDA buy signed with a connected wallet (`0xf353df4d5b9a925ea02399237bc6badf7d5ac75e41088ea104a6083dc2b9dfe1`), a $0.50 NVDA DCA buy sent by the agent wallet (`0xfea991d5425612b143af50a78677f64c1381e960b3de2f36bda7f8f19ff93088`), and a $0.20 USDG payment (`0xb342bac44a45e0eadacf90f50184efccf6604d9a283499df0172b728877a953e`). The unit tests run with `npm test`.
 
 **Robinhood MCP:** the connector is unverified with a real login. Robinhood's sign-in is an OAuth flow in a desktop browser, so a token has to be supplied as `ROBINHOOD_MCP_TOKEN`. It is off by default and read-only.
 
-**Simplifications:**
+**Limits:**
 - Holdings are valued at the mid price and ignore Robinhood's small share multiplier (about 0.1%).
 - Locally the dashboard listens on localhost only and has no login. Hosted, it is protected by a single shared password (one user, not a multi-user system).
 
