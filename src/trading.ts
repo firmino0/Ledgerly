@@ -1,0 +1,106 @@
+import { formatUnits, parseUnits } from 'viem'
+import { addPending, type TradeRequest } from './approvals.js'
+import { config } from './config.js'
+import { evaluate } from './guardrails.js'
+import { readAll, record, spentToday } from './ledger.js'
+import { getQuote, type Quote } from './market.js'
+import { paperBuy, paperSell, getPaper } from './paper.js'
+import { balanceOf, buyToken, quoteBuy, quoteSell, sellToken } from './swap.js'
+import { walletAddress } from './chain.js'
+import { bumpVersion } from './store.js'
+
+export interface TradeResult {
+  status: 'executed' | 'dry_run' | 'denied' | 'pending_approval' | 'skipped' | 'error'
+  message: string
+  approvalId?: string
+  amountUsd?: number
+  tokens?: number
+  txHash?: string
+}
+
+const log = (t: TradeRequest, verdict: 'allow' | 'needs_approval' | 'deny', action: string, executed: boolean, reasoning: string, txHash?: string) =>
+  record({ module: t.module, action, amountUsd: t.amountUsd, verdict, executed, dryRun: config.dryRun, txHash, reasoning })
+
+async function execute(t: TradeRequest, q: Quote): Promise<TradeResult> {
+  const label = `${t.side === 'buy' ? 'Buy' : 'Sell'} ${t.symbol}`
+  const contract = q.contract as `0x${string}`
+
+  if (t.side === 'buy') {
+    const route = await quoteBuy(contract, t.amountUsd, q.ask)
+    const detail = `~${route.tokens.toFixed(6)} tokens via ${route.fee / 10_000}% pool @ $${route.impliedPriceUsd.toFixed(2)} (ask ${q.ask})`
+    if (config.dryRun) {
+      paperBuy(t.symbol, t.amountUsd, route.tokens)
+      log(t, 'allow', `${label}: ${detail}`, true, t.why)
+      return { status: 'dry_run', amountUsd: t.amountUsd, tokens: route.tokens, message: `DRY RUN: would buy $${t.amountUsd} of ${t.symbol}, ${detail}.` }
+    }
+    const { swapTx } = await buyToken(contract, t.amountUsd, route)
+    log(t, 'allow', `${label}: ${detail}`, true, t.why, swapTx)
+    return { status: 'executed', amountUsd: t.amountUsd, tokens: route.tokens, txHash: swapTx, message: `Bought $${t.amountUsd} of ${t.symbol}, ${detail}. tx ${swapTx}` }
+  }
+
+  // sell: never sell more than is held
+  const wanted = t.amountUsd / q.mid
+  let held: number
+  const owner = walletAddress()
+  if (config.dryRun) held = getPaper().holdings[t.symbol] ?? 0
+  else if (owner) held = Number(formatUnits(await balanceOf(contract, owner), 18))
+  else throw new Error('AGENT_PRIVATE_KEY is not set.')
+  const tokens = Math.min(wanted, held)
+  if (tokens <= 0) return { status: 'skipped', message: `Nothing to sell: no ${t.symbol} held.` }
+  const usdEstimate = Math.round(tokens * q.mid * 100) / 100
+
+  const amountIn = parseUnits(tokens.toFixed(18), 18)
+  const route = await quoteSell(contract, amountIn, q.bid)
+  const detail = `~${tokens.toFixed(6)} tokens for ~$${route.usdOut.toFixed(2)} via ${route.fee / 10_000}% pool @ $${route.impliedPriceUsd.toFixed(2)} (bid ${q.bid})`
+  if (config.dryRun) {
+    paperSell(t.symbol, tokens, route.usdOut)
+    log(t, 'allow', `${label}: ${detail}`, true, t.why)
+    return { status: 'dry_run', amountUsd: usdEstimate, tokens, message: `DRY RUN: would sell ${detail}.` }
+  }
+  const { swapTx } = await sellToken(contract, amountIn, route)
+  log(t, 'allow', `${label}: ${detail}`, true, t.why, swapTx)
+  return { status: 'executed', amountUsd: usdEstimate, tokens, txHash: swapTx, message: `Sold ${detail}. tx ${swapTx}` }
+}
+
+/**
+ * Single path for every buy and sell (DCA and rebalancing): quote -> guardrails -> hold, deny or execute.
+ * `approved` is set only when a human has approved a held trade; caps are still re-checked.
+ */
+export async function requestTrade(t: TradeRequest, opts: { approved?: boolean } = {}): Promise<TradeResult> {
+  const label = `${t.side === 'buy' ? 'Buy' : 'Sell'} ${t.symbol}`
+  try {
+    const q = await getQuote(t.symbol)
+    if (q.halted) {
+      log(t, 'allow', `Skip ${label}`, false, 'Trading is halted for this asset.')
+      return { status: 'skipped', message: `${t.symbol} trading is halted.` }
+    }
+    if (!q.contract) {
+      log(t, 'allow', `Skip ${label}`, false, 'No Robinhood Chain deployment found for this symbol.')
+      return { status: 'error', message: `${t.symbol} has no Robinhood Chain deployment.` }
+    }
+
+    const policy = opts.approved ? { ...config.policy, approvalThreshold: Infinity } : config.policy
+    const verdict = evaluate(policy, { amountUsd: t.amountUsd }, spentToday(readAll()), new Set())
+
+    if (verdict.decision === 'deny') {
+      log(t, 'deny', label, false, `${verdict.reason} ${t.why}`)
+      return { status: 'denied', amountUsd: t.amountUsd, message: `Denied: ${verdict.reason}` }
+    }
+    if (verdict.decision === 'needs_approval') {
+      const p = addPending({ kind: 'trade', trade: t })
+      log(t, 'needs_approval', label, false, `${verdict.reason} ${t.why}`)
+      return { status: 'pending_approval', approvalId: p.id, amountUsd: t.amountUsd, message: `Held for approval (${verdict.reason}) id ${p.id}` }
+    }
+    if (!config.dryRun && config.network !== 'mainnet') {
+      log(t, 'allow', label, false, 'Live swaps need NETWORK=mainnet; nothing was traded.')
+      return { status: 'error', message: 'Live swaps need NETWORK=mainnet.' }
+    }
+    const result = await execute(t, q)
+    bumpVersion()
+    return result
+  } catch (err) {
+    const msg = (err as Error).message
+    log(t, 'allow', label, false, `Error: ${msg}`)
+    return { status: 'error', message: msg }
+  }
+}
