@@ -2,6 +2,7 @@ import { encodeFunctionData, erc20Abi, formatEther, formatUnits, getAddress, isA
 import { mainnetClient } from './chain.js'
 import { getPending, payeeSet, takePending, type PayRequest, type TradeRequest } from './approvals.js'
 import { config } from './config.js'
+import { dryRun, policy } from './mode.js'
 import { evaluate } from './guardrails.js'
 import { type LedgerEntry, readAll, record, spentToday } from './ledger.js'
 import { getQuote } from './market.js'
@@ -56,7 +57,7 @@ export const swapStep = (tokenIn: Address, tokenOut: Address, fee: number, recip
 })
 
 // ---------- helpers ----------
-export const signingAvailable = () => config.network === 'mainnet' && !config.dryRun
+export const signingAvailable = () => config.network === 'mainnet' && !dryRun()
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`
 const allowanceOf = (token: Address, owner: Address, spender: Address) =>
@@ -81,7 +82,7 @@ function pruned(all: Record<string, Prepared>): Record<string, Prepared> {
 
 // ---------- prepare ----------
 async function prepareTrade(t: TradeRequest, account: Address) {
-  const verdict = evaluate({ ...config.policy, approvalThreshold: Infinity }, { amountUsd: t.amountUsd }, spentToday(readAll()), new Set())
+  const verdict = evaluate({ ...policy(), approvalThreshold: Infinity }, { amountUsd: t.amountUsd }, spentToday(readAll()), new Set())
   if (verdict.decision === 'deny') throw new Error(`Blocked by your rules: ${verdict.reason}`)
 
   const q = await getQuote(t.symbol)
@@ -115,7 +116,7 @@ async function prepareTrade(t: TradeRequest, account: Address) {
 }
 
 async function preparePayment(req: PayRequest, account: Address) {
-  const verdict = evaluate({ ...config.policy, approvalThreshold: Infinity }, req, spentToday(readAll()), payeeSet())
+  const verdict = evaluate({ ...policy(), approvalThreshold: Infinity }, req, spentToday(readAll()), payeeSet())
   if (verdict.decision === 'deny') throw new Error(`Blocked by your rules: ${verdict.reason}`)
   const token = (config.paymentToken ?? ADDR.usdg) as Address
   const amount = parseUnits(req.amountUsd.toString(), config.paymentDecimals)

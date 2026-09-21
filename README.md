@@ -65,6 +65,8 @@ Files live in `web/`. Design tokens are in `web/assets/tokens.css` (light and da
 
 **Hosting on Vercel.** The website and the dashboard can both be hosted. Hosted mode adds a password login, keeps state in Upstash Redis instead of local files, and runs the DCA timer through a secured cron endpoint. See [DEPLOY.md](DEPLOY.md). Running it on your own computer is unchanged and needs no login.
 
+Other people can try it in three ways, each switched off unless you enable it: a read-only **demo** with sample data (`/demo`), a private simulated **sandbox** for each visitor (`/sandbox`), and real **accounts** (`/account`) where each person signs every transaction with their own wallet. Accounts have no server-side key, so the owner's wallet can never be reached from them.
+
 Design notes: the look is a printed ledger (warm paper, one green accent, a serif for headings, monospace tabular figures, thin rules instead of shadowed cards). All text is inserted as text nodes rather than HTML, and the server sends a strict Content-Security-Policy with no inline scripts or styles. Approving a held action while in live mode asks for a browser confirmation first.
 
 ## Quick start
@@ -126,7 +128,7 @@ See `.env.example`. Main settings: `SERV_API_KEY`, `SERV_MODEL`, `NETWORK`, `DRY
 
 ## Status and honest limits
 
-**Tested:** guardrails, rebalancing math, swap route selection, wallet transaction data, DCA decision parsing and the MCP read-only filter (34 unit tests); live SERV Reasoning calls; live Robinhood price API; live onchain quotes on mainnet; the dashboard end to end in dry-run mode, including approvals and restart persistence; and three live mainnet transactions, all confirmed on Robinhood Chain: a $0.50 NVDA buy signed with a connected wallet (`0xf353df4d5b9a925ea02399237bc6badf7d5ac75e41088ea104a6083dc2b9dfe1`), a $0.50 NVDA DCA buy sent by the agent wallet (`0xfea991d5425612b143af50a78677f64c1381e960b3de2f36bda7f8f19ff93088`), and a $0.20 USDG payment (`0xb342bac44a45e0eadacf90f50184efccf6604d9a283499df0172b728877a953e`).
+**Tested:** guardrails, rebalancing math, swap route selection, wallet transaction data, DCA decision parsing and the MCP read-only filter (77 unit tests); live SERV Reasoning calls; live Robinhood price API; live onchain quotes on mainnet; the dashboard end to end in dry-run mode, including approvals and restart persistence; and three live mainnet transactions, all confirmed on Robinhood Chain: a $0.50 NVDA buy signed with a connected wallet (`0xf353df4d5b9a925ea02399237bc6badf7d5ac75e41088ea104a6083dc2b9dfe1`), a $0.50 NVDA DCA buy sent by the agent wallet (`0xfea991d5425612b143af50a78677f64c1381e960b3de2f36bda7f8f19ff93088`), and a $0.20 USDG payment (`0xb342bac44a45e0eadacf90f50184efccf6604d9a283499df0172b728877a953e`).
 
 **Not yet run with real funds:** live sells and live rebalancing. The code is written and the dry-run path exercises the same quoting, but only buys and one payment have run on mainnet. Treat the next live run of those as a test.
 

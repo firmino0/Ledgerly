@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { config } from './config.js'
+import { dryRun } from './mode.js'
 import { record } from './ledger.js'
 import { getQuote, type Quote } from './market.js'
 import { ask } from './reasoning.js'
@@ -110,7 +111,7 @@ async function decide(plan: DcaPlan, q: Quote): Promise<DcaDecision> {
 export async function runPlan(plan: DcaPlan, now = new Date()): Promise<DcaRunResult> {
   const base = { planId: plan.id, symbol: plan.symbol }
   const skip = (reasoning: string) =>
-    record({ module: 'dca', action: `Skip ${plan.symbol}`, verdict: 'allow', executed: false, dryRun: config.dryRun, reasoning })
+    record({ module: 'dca', action: `Skip ${plan.symbol}`, verdict: 'allow', executed: false, dryRun: dryRun(), reasoning })
 
   try {
     const q = await getQuote(plan.symbol)

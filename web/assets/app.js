@@ -59,13 +59,55 @@ const mark = e => {
   return h('span', { class: 'mark ' + cls }, label)
 }
 
+/* ---------- modes: owner (the real dashboard), demo (sample data), sandbox (a private practice copy) ---------- */
+const MODE = location.pathname === '/demo' ? 'demo' : location.pathname === '/sandbox' ? 'sandbox' : location.pathname === '/me' ? 'user' : 'owner'
+// The real wallet features exist for the owner and for signed-in accounts.
+const HAS_WALLET = MODE === 'owner' || MODE === 'user'
+
+class NeedSandbox extends Error {}
+
+let demoFixture = null
+/** Sample data stores "minutes ago" so the demo always looks recent. */
+function freshDemo(f) {
+  const s = structuredClone(f)
+  const now = Date.now()
+  const ago = m => new Date(now - m * 60000).toISOString()
+  s.ledger.forEach(e => (e.ts = ago(e.agoMin)))
+  s.pending.forEach(p => {
+    p.createdAt = ago(p.agoMin)
+    p.expiresAt = new Date(now - p.agoMin * 60000 + 24 * 3600e3).toISOString()
+  })
+  s.plans.forEach(p => {
+    if (p.lastAgoMin != null) p.lastRunAt = ago(p.lastAgoMin)
+  })
+  return s
+}
+
+async function demoApi(path, body) {
+  if (body !== undefined) throw new Error('This is the demo, so actions are switched off. Run Ledgerly yourself, or try the sandbox if this site has one, to use it for real.')
+  if (path === '/api/state') {
+    demoFixture ??= await (await fetch('/assets/demo-state.json')).json()
+    return freshDemo(demoFixture)
+  }
+  throw new Error('Not available in the demo.')
+}
+
 /* ---------- api, toast, state ---------- */
 async function api(path, body) {
-  const res = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  if (MODE === 'demo') return demoApi(path, body)
+  const extra = MODE === 'sandbox' ? { 'x-ledgerly-mode': 'sandbox' } : MODE === 'user' ? { 'x-ledgerly-mode': 'user' } : {}
+  const res = await fetch(path, body === undefined ? { headers: extra } : { method: 'POST', headers: { 'content-type': 'application/json', ...extra }, body: JSON.stringify(body) })
   const json = await res.json().catch(() => ({}))
-  if (res.status === 401 && path !== '/api/login') {
-    location.replace('/login')
-    throw new Error('Sign in required')
+  if (res.status === 401) {
+    if (MODE === 'sandbox') throw new NeedSandbox('Start a sandbox first.')
+    if (MODE === 'user') {
+      location.replace('/account')
+      throw new Error('Sign in required')
+    }
+    if (path !== '/api/login') {
+      location.replace('/login')
+      throw new Error('Sign in required')
+    }
   }
   if (!res.ok) throw new Error(json.error || `Request failed (${res.status})`)
   return json
@@ -168,6 +210,8 @@ function setAccount(a) {
   wallet.usdg = null
   paintWallet()
   if (a) loadWalletBalance()
+  // An account's live portfolio is read from the wallet it links.
+  if (a && MODE === 'user') api('/api/account/wallet', { address: a }).then(() => refresh()).catch(() => {})
 }
 
 async function connectWallet() {
@@ -246,7 +290,7 @@ function confirmLive(what) {
 
 function queueList() {
   if (!S.pending.length) {
-    return empty('Nothing is waiting.', `Anything above your ${whole(S.policy.approvalThreshold)} approval line will appear here for you to approve or reject.`)
+    return empty('Nothing is waiting.', MODE === 'user' ? 'Every action you propose appears here, and you sign it with your own wallet.' : `Anything above your ${whole(S.policy.approvalThreshold)} approval line will appear here for you to approve or reject.`)
   }
   return h(
     'ul',
@@ -262,7 +306,9 @@ function queueList() {
           { class: 'acts' },
           S.signing ? h('button', { class: 'btn btn-primary btn-sm', type: 'button', title: 'Your own wallet signs and sends this. The agent key is not used.', onclick: e => act(e.currentTarget, () => signWithWallet(p), r => r.message) }, 'Sign with my wallet') : null,
           // Live with no agent key on the server: the agent has no wallet to send from, so only signing (or rejecting) applies.
-          S.signing && !S.wallet
+          MODE === 'user' && S.signing
+            ? null
+            : S.signing && !S.wallet
             ? null
             : h('button', { class: 'btn btn-sm' + (S.signing ? '' : ' btn-primary'), type: 'button', title: S.signing ? "The agent's own wallet sends this within your limits." : null, onclick: e => confirmLive(`Approve ${p.label} for ${usd(p.amountUsd)}?`) && act(e.currentTarget, () => api('/api/approve', { id: p.id }), r => r.message || 'Approved') }, S.signing ? 'Let agent send' : 'Approve'),
           h('button', { class: 'btn btn-sm', type: 'button', onclick: e => act(e.currentTarget, () => api('/api/reject', { id: p.id }), r => r.message) }, 'Reject')
@@ -323,7 +369,7 @@ function overview() {
       meter.firstChild.style.width = capUsed * 100 + '%'
       const plan = s.portfolio && s.portfolio.plan
       figs.replaceChildren(
-        fig('Agent wallet · USDG', balanceOk ? usd(s.balance) : '—', s.wallet ? short(s.wallet) : 'No wallet configured'),
+        fig(MODE === 'user' ? 'Your wallet · USDG' : 'Agent wallet · USDG', balanceOk ? usd(s.balance) : '—', s.wallet ? short(s.wallet) : MODE === 'user' ? 'Connect your wallet to see it' : 'No wallet configured'),
         fig('Spent today', usd(s.spentToday), `of ${whole(s.policy.maxPerDay)} daily cap`, meter),
         fig('Portfolio', plan ? usd(plan.totalUsd) : s.dryRun ? usd(s.paper.cashUsd) : '—', plan ? (s.dryRun ? 'Paper portfolio, simulated' : 'From your wallet') : s.dryRun ? 'Paper cash, no targets set' : 'No targets set'),
         fig('Waiting on you', String(s.pending.length), 'payments and trades')
@@ -337,12 +383,12 @@ function overview() {
           [
             ['Per-transaction cap', whole(s.policy.maxPerTx)],
             ['Daily cap', whole(s.policy.maxPerDay)],
-            ['Approval needed above', whole(s.policy.approvalThreshold)],
+            MODE === 'user' ? ['Approval', 'Your own signature'] : ['Approval needed above', whole(s.policy.approvalThreshold)],
             ['Approvals expire after', '24 h'],
             ['Payees', 'Allowlist only']
           ].map(([k, v]) => h('div', {}, h('dt', {}, k), h('dd', { class: v.startsWith('$') || v.endsWith('h') ? 'num' : '' }, v)))
         ),
-        h('p', { class: 'muted' }, 'Set in your .env file. The model cannot change them.')
+        h('p', { class: 'muted' }, MODE === 'user' ? 'Set by the site owner. The model cannot change them.' : 'Set in your .env file. The model cannot change them.')
       )
     }
   }
@@ -534,8 +580,16 @@ function paintChrome() {
   const banner = $('#banner')
   const msg = $('#banner-msg')
   const net = S.network === 'mainnet' ? 'Robinhood Chain mainnet' : 'Robinhood Chain testnet'
-  banner.className = 'banner' + (S.dryRun ? '' : ' live')
-  msg.textContent = S.dryRun ? (S.liveBlocked ? `Dry run · live mode blocked: ${S.liveBlocked}` : 'Dry run · simulated portfolio · no real funds move') : `Live · ${net} · real funds`
+  if (MODE === 'user') {
+    banner.className = 'banner' + (S.dryRun ? '' : ' live')
+    msg.textContent = S.dryRun ? 'Dry run · simulated portfolio · no real funds move' : `Live · ${net} · your own wallet signs every transaction`
+  } else if (MODE !== 'owner') {
+    banner.className = 'banner demo'
+    msg.textContent = MODE === 'demo' ? 'Demo · sample data · actions are switched off' : 'Sandbox · your own private copy · simulated money only · resets after about a day'
+  } else {
+    banner.className = 'banner' + (S.dryRun ? '' : ' live')
+    msg.textContent = S.dryRun ? (S.liveBlocked ? `Dry run · live mode blocked: ${S.liveBlocked}` : 'Dry run · simulated portfolio · no real funds move') : `Live · ${net} · real funds`
+  }
   $('#side-net').textContent = S.network === 'mainnet' ? 'Robinhood Chain · mainnet 4663' : 'Robinhood Chain · testnet 46630'
   $('#side-wallet').textContent = S.wallet ? short(S.wallet) : 'No wallet'
   const copy = $('#copy-wallet')
@@ -545,6 +599,55 @@ function paintChrome() {
   badge.textContent = S.pending.length
 }
 
+let introShown = false
+function sandboxIntro(problem) {
+  if (introShown && !problem) return
+  introShown = true
+  current = null
+  $('#banner').className = 'banner demo'
+  $('#banner-msg').textContent = 'Sandbox · start your own private practice copy'
+  const start = h(
+    'button',
+    {
+      class: 'btn btn-primary',
+      type: 'button',
+      disabled: problem ? true : null,
+      onclick: async e => {
+        const b = e.currentTarget
+        b.disabled = true
+        try {
+          await api('/api/sandbox', {})
+          introShown = false
+          await refresh()
+        } catch (err) {
+          toast(err.message, true)
+          b.disabled = false
+        }
+      }
+    },
+    'Start my sandbox'
+  )
+  $('#view').replaceChildren(
+    h(
+      'div',
+      { class: 'intro' },
+      viewHead('Try Ledgerly', 'A private practice copy with simulated money. Nothing in it can touch a real wallet.'),
+      h(
+        'ul',
+        { class: 'intro-list' },
+        [
+          'You get your own $1,000 practice portfolio, payees, plans and ledger. Nobody else can see them.',
+          'Prices and swap quotes are real, read live from Robinhood Chain. Only the money is simulated.',
+          'The explanations in the ledger come from the same model the real app uses, with a small daily allowance. When it is used up, plain rules run instead.',
+          'It resets after about a day. There is no sign-up and no password.'
+        ].map(t => h('li', {}, t))
+      ),
+      problem ? h('p', { class: 'error' }, problem) : null,
+      start
+    )
+  )
+}
+
 async function refresh() {
   try {
     S = await api('/api/state')
@@ -552,7 +655,9 @@ async function refresh() {
     if (!current) mount()
     else current.update(S)
     if (wallet.account) loadWalletBalance()
-  } catch {
+  } catch (e) {
+    if (e instanceof NeedSandbox) return sandboxIntro(null)
+    if (MODE === 'sandbox') return sandboxIntro(e.message)
     const banner = $('#banner')
     banner.className = 'banner error'
     $('#banner-msg').textContent = 'Cannot reach the Ledgerly server. Is it still running?'
@@ -566,6 +671,7 @@ let firstRoute = true
 let wanted = 'overview'
 
 function mount() {
+  introShown = false
   current = ROUTES[wanted]()
   $('#view').replaceChildren(current.root)
   current.update(S)
@@ -573,11 +679,14 @@ function mount() {
 
 function route() {
   wanted = ROUTES[location.hash.replace('#/', '')] ? location.hash.replace('#/', '') : 'overview'
-  document.title = `${TITLES[wanted]} · Ledgerly`
+  document.title = `${TITLES[wanted]} · Ledgerly${MODE === 'demo' ? ' demo' : MODE === 'sandbox' ? ' sandbox' : ''}`
   document.querySelectorAll('#nav a').forEach(a => (a.dataset.view === wanted ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')))
   current = null
   if (S) mount()
-  else $('#view').replaceChildren(h('div', {}, h('div', { class: 'skeleton' }), h('div', { class: 'skeleton' }), h('div', { class: 'skeleton' })))
+  else {
+    introShown = false
+    $('#view').replaceChildren(h('div', {}, h('div', { class: 'skeleton' }), h('div', { class: 'skeleton' }), h('div', { class: 'skeleton' })))
+  }
   if (!firstRoute) $('#main').focus({ preventScroll: true })
   firstRoute = false
   scrollTo(0, 0)
@@ -606,32 +715,91 @@ $('#wallet-x').addEventListener('click', () => {
   setAccount(null)
   toast('Disconnected from this page. Your wallet may still list the site as connected.')
 })
-if (provider()) {
+if (HAS_WALLET && provider()) {
   // Restore a previous connection silently (no popup), unless the user disconnected on purpose.
   if (!wasOff()) provider().request({ method: 'eth_accounts' }).then(a => a[0] && setAccount(a[0])).catch(() => {})
   if (provider().on) provider().on('accountsChanged', a => !wasOff() && setAccount(a[0] || null))
 }
 
-// Sign-in: when the server has a password, send visitors without a session to the login page.
-fetch('/api/session')
-  .then(r => r.json())
-  .then(s => {
-    if (!s.authRequired) return
-    if (!s.authed) return void location.replace('/login')
-    $('#signout').hidden = false
+if (MODE === 'owner') {
+  // Sign-in: when the server has a password, send visitors without a session to the login page.
+  fetch('/api/session')
+    .then(r => r.json())
+    .then(s => {
+      if (!s.authRequired) return
+      if (!s.authed) return void location.replace('/login')
+      $('#signout').hidden = false
+    })
+    .catch(() => {})
+  $('#signout').addEventListener('click', async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+    } finally {
+      location.replace('/login')
+    }
   })
-  .catch(() => {})
-$('#signout').addEventListener('click', async () => {
-  try {
-    await fetch('/api/logout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-  } finally {
-    location.replace('/login')
+} else if (MODE === 'user') {
+  // A signed-in account: its own wallet and its own sign-out. There is no owner login here.
+  $('#signout').hidden = false
+  $('#signout').addEventListener('click', async () => {
+    try {
+      await fetch('/api/signout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+    } finally {
+      location.replace('/account')
+    }
+  })
+  const del = $('#delete-account')
+  del.hidden = false
+  del.addEventListener('click', async () => {
+    if (!confirm('Delete your account and all of its saved plans, payees and ledger? Your wallet and funds are not affected. This cannot be undone.')) return
+    const password = prompt('Enter your password to confirm.')
+    if (!password) return
+    try {
+      await api('/api/account/delete', { password })
+      location.replace('/account')
+    } catch (e) {
+      toast(e.message, true)
+    }
+  })
+} else {
+  // Demo and sandbox visitors have no wallet and no owner login.
+  $('#wallet-btn').hidden = true
+  $('#wallet-x').hidden = true
+  $('#signout').hidden = MODE === 'demo'
+  const link = $('#banner-link')
+  if (MODE === 'sandbox') {
+    $('#signout').textContent = 'End sandbox'
+    $('#signout').addEventListener('click', async () => {
+      try {
+        await fetch('/api/sandbox/end', { method: 'POST', headers: { 'content-type': 'application/json', 'x-ledgerly-mode': 'sandbox' }, body: '{}' })
+      } finally {
+        location.replace('/sandbox')
+      }
+    })
+    link.textContent = 'Website'
+    link.href = '/'
+    link.hidden = false
+  } else {
+    // Point demo visitors to the sandbox, but only when this site has one.
+    link.href = '/sandbox'
+    link.textContent = 'Try the sandbox'
+    fetch('/api/session')
+      .then(r => r.json())
+      .then(x => (link.hidden = !x.sandboxEnabled))
+      .catch(() => {})
   }
-})
+}
 
 addEventListener('hashchange', route)
 document.addEventListener('visibilitychange', () => !document.hidden && refresh())
-setInterval(() => !document.hidden && refresh(), 5000)
+// Hosted copies refresh less often (each refresh reads the database). The static demo never needs to.
+if (MODE !== 'demo') {
+  const tick = async () => {
+    if (!document.hidden) await refresh()
+    setTimeout(tick, S && S.hosted ? 20000 : 5000)
+  }
+  setTimeout(tick, 5000)
+}
 
 route()
 refresh()

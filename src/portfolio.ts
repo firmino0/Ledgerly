@@ -1,6 +1,8 @@
 import { formatUnits } from 'viem'
 import { walletAddress } from './chain.js'
 import { config } from './config.js'
+import { dryRun } from './mode.js'
+import { isUser } from './store.js'
 import { record } from './ledger.js'
 import { getQuote } from './market.js'
 import { getPaper } from './paper.js'
@@ -111,14 +113,14 @@ export async function snapshot(symbols: string[]): Promise<Snapshot> {
   const quotes = await Promise.all(symbols.map(s => getQuote(s)))
   const holdingsUsd: Record<string, number> = {}
 
-  if (config.dryRun) {
+  if (dryRun()) {
     const paper = getPaper()
     quotes.forEach(q => (holdingsUsd[q.symbol] = (paper.holdings[q.symbol] ?? 0) * q.mid))
     return { source: 'paper', holdingsUsd, cashUsd: paper.cashUsd }
   }
 
   const owner = walletAddress()
-  if (!owner) throw new Error('AGENT_PRIVATE_KEY is not set, so the wallet cannot be read.')
+  if (!owner) throw new Error(isUser() ? 'Connect your wallet on the dashboard to see your live portfolio.' : 'AGENT_PRIVATE_KEY is not set, so the wallet cannot be read.')
   const usdg = await balanceOf(ADDR.usdg, owner)
   for (const q of quotes) {
     if (!q.contract) throw new Error(`${q.symbol} has no Robinhood Chain deployment.`)
@@ -133,7 +135,7 @@ let viewCache: { at: number; version: number; value: unknown } | null = null
 export async function portfolioView() {
   const cfg = getPortfolioConfig()
   const symbols = Object.keys(cfg.targets)
-  if (!symbols.length) return { cfg, source: config.dryRun ? 'paper' : 'onchain', plan: null as Plan | null }
+  if (!symbols.length) return { cfg, source: dryRun() ? 'paper' : 'onchain', plan: null as Plan | null }
   // The short cache is per process, so it is skipped when hosted (another instance may have changed the balances).
   if (!isRemote() && viewCache && viewCache.version === getVersion() && Date.now() - viewCache.at < 20_000) return viewCache.value as { cfg: PortfolioConfig; source: string; plan: Plan }
   const snap = await snapshot(symbols)
@@ -160,7 +162,7 @@ export async function runRebalance(): Promise<RebalanceResult> {
 
   if (!plan.trades.length) {
     const msg = `Portfolio is within ${cfg.driftThresholdPct} points of target. No trades needed.`
-    record({ module: 'rebalance', action: 'Rebalance check', verdict: 'allow', executed: false, dryRun: config.dryRun, reasoning: msg })
+    record({ module: 'rebalance', action: 'Rebalance check', verdict: 'allow', executed: false, dryRun: dryRun(), reasoning: msg })
     return { message: msg, plan, results: [] }
   }
 

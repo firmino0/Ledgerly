@@ -2,17 +2,21 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { getAddress } from 'viem'
 import { z } from 'zod'
+import { USER_ALLOWED, USER_LIMITS, checkLogin, createAccount, loginAllowed, removeAccount, signupAllowed, usersEnabled, validatePassword, validateUsername } from './accounts.js'
 import { APPROVAL_TTL_MS, listPending } from './approvals.js'
 import { approveAny, rejectAny } from './approve.js'
-import { authConfigProblem, authRequired, checkPassword, clearedCookie, clientId, cronAuthorized, hosted, isAuthed, makeToken, sameOrigin, sessionCookie } from './auth.js'
+import { authConfigProblem, authRequired, checkPassword, clearedCookie, clearedSandboxCookie, clearedUserCookie, clientId, cronAuthorized, hosted, isAuthed, makeSandboxId, makeSandboxToken, makeToken, makeUserToken, sameOrigin, sandboxCookie, sandboxIdFrom, sessionCookie, userCookie, userIdFrom } from './auth.js'
 import { tokenBalance, walletAddress } from './chain.js'
 import { config, liveBlockedReason } from './config.js'
+import { dryRun, policy } from './mode.js'
 import { cancelPlan, createPlan, listPlans, runDue } from './dca.js'
 import { readAll, spentToday } from './ledger.js'
 import { getPaper, resetPaper } from './paper.js'
 import { portfolioView, runRebalance, setTargets } from './portfolio.js'
-import { backendName, bumpVersion, withinRateLimit, withStore } from './store.js'
+import { LIMITS, SANDBOX_ALLOWED, actionAllowed, canStartSandbox, sandboxEnabled } from './sandbox.js'
+import { backendName, bumpVersion, dataPath, isSandbox, isUser, readJson as readSaved, withinRateLimit, withStore, writeJson } from './store.js'
 import { addPayee, listPayees, pay } from './treasury.js'
 import { completeSigned, prepareSigned, signingAvailable, walletBalances } from './walletSign.js'
 
@@ -28,8 +32,14 @@ const bodies = {
   targets: z.object({ targets: z.record(z.string(), z.number()), driftThresholdPct: z.number().optional() }),
   paper: z.object({ cashUsd: z.number().min(0).max(1_000_000) }),
   prepare: z.object({ id: z.string(), account: z.string() }),
-  complete: z.object({ id: z.string(), account: z.string(), hashes: z.array(z.string()).min(1).max(3) })
+  complete: z.object({ id: z.string(), account: z.string(), hashes: z.array(z.string()).min(1).max(3) }),
+  linkWallet: z.object({ address }),
+  confirm: z.object({ password: z.string().min(1).max(128) }),
+  signup: z.object({ username: z.string(), password: z.string(), accept: z.literal(true, { errorMap: () => ({ message: 'Please confirm that you understand the risks.' }) }) }),
+  signin: z.object({ username: z.string(), password: z.string() })
 }
+
+const PROFILE = dataPath('profile.json')
 
 const EXPLORER = config.network === 'mainnet' ? 'https://robinhoodchain.blockscout.com/tx/' : 'https://explorer.testnet.chain.robinhood.com/tx/'
 
@@ -37,15 +47,17 @@ async function state() {
   const entries = readAll()
   return {
     network: config.network,
-    dryRun: config.dryRun,
+    dryRun: dryRun(),
     liveBlocked: liveBlockedReason,
     signing: signingAvailable(),
     hosted: hosted(),
+    sandbox: isSandbox(),
+    user: isUser() ? { username: readSaved<{ username?: string }>(PROFILE, {}).username ?? null } : null,
     store: backendName(),
     explorer: EXPLORER,
     wallet: walletAddress() ?? null,
     balance: await tokenBalance().catch(() => 'unavailable'),
-    policy: config.policy,
+    policy: policy(),
     spentToday: spentToday(entries),
     payees: listPayees(),
     pending: listPending().map(p => {
@@ -77,6 +89,7 @@ const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.woff2': 'font/woff2',
   '.txt': 'text/plain; charset=utf-8'
@@ -84,7 +97,7 @@ const TYPES: Record<string, string> = {
 
 /** Serve a file from web/. Refuses anything that resolves outside that folder or has an unknown extension. */
 function serveStatic(res: ServerResponse, urlPath: string): boolean {
-  const map: Record<string, string> = { '/': 'index.html', '/app': 'app.html', '/app/': 'app.html', '/login': 'login.html' }
+  const map: Record<string, string> = { '/': 'index.html', '/app': 'app.html', '/app/': 'app.html', '/login': 'login.html', '/demo': 'app.html', '/sandbox': 'app.html', '/me': 'app.html', '/account': 'account.html' }
   const rel = map[urlPath] ?? decodeURIComponent(urlPath).replace(/^\/+/, '')
   const file = resolve(WEB, rel)
   const inside = relative(WEB, file)
@@ -146,6 +159,7 @@ async function route(req: IncomingMessage, res: ServerResponse, method: string, 
     const raw = await readJson(req)
     switch (path) {
       case '/api/dca': {
+        if (isSandbox() && listPlans().filter(p => p.active).length >= LIMITS.plans) return send(res, 400, { error: `A sandbox can have up to ${LIMITS.plans} plans.` })
         const b = bodies.dca.parse(raw)
         return send(res, 200, createPlan(b.symbol, b.amountUsd, b.intervalHours))
       }
@@ -154,6 +168,7 @@ async function route(req: IncomingMessage, res: ServerResponse, method: string, 
       case '/api/dca/cancel':
         return send(res, 200, { ok: cancelPlan(bodies.cancel.parse(raw).id) })
       case '/api/payee': {
+        if (isSandbox() && listPayees().length >= LIMITS.payees) return send(res, 400, { error: `A sandbox can have up to ${LIMITS.payees} payees.` })
         const b = bodies.payee.parse(raw)
         addPayee(b.address, b.label)
         return send(res, 200, { ok: true })
@@ -185,9 +200,101 @@ async function route(req: IncomingMessage, res: ServerResponse, method: string, 
       }
       case '/api/reject':
         return send(res, 200, rejectAny(bodies.id.parse(raw).id))
+      case '/api/account/wallet': {
+        if (!isUser()) return send(res, 403, { error: 'Only for accounts.' })
+        const b = bodies.linkWallet.parse(raw)
+        writeJson(PROFILE, { ...readSaved<Record<string, unknown>>(PROFILE, {}), wallet: getAddress(b.address) })
+        return send(res, 200, { ok: true })
+      }
     }
   }
   send(res, 404, { error: 'Not found' })
+}
+
+/** Sign up: a username and password, plus an acknowledgement that real funds are involved. */
+async function signup(req: IncomingMessage, res: ServerResponse, secure: boolean) {
+  if (!usersEnabled()) return send(res, 404, { error: 'Accounts are not switched on for this site.' })
+  if (!req.headers['content-type']?.startsWith('application/json')) return send(res, 415, { error: 'JSON only' })
+  if (!sameOrigin(req)) return send(res, 403, { error: 'Cross-site request refused' })
+  // Check the form first: a typo should not use up the sign-up allowance. Only well-formed attempts are counted.
+  const b = bodies.signup.parse(await readJson(req))
+  validatePassword(b.password, validateUsername(b.username))
+  const allowed = await signupAllowed(clientId(req))
+  if (!allowed.ok) return send(res, 429, { error: allowed.message })
+  const { id, username } = await createAccount(b.username, b.password)
+  await withStore(async () => writeJson(PROFILE, { username, acceptedAt: new Date().toISOString() }), { lock: true, tenant: { kind: 'user', id } })
+  res.setHeader('set-cookie', userCookie(makeUserToken(id), secure))
+  send(res, 200, { ok: true })
+}
+
+async function signin(req: IncomingMessage, res: ServerResponse, secure: boolean) {
+  if (!usersEnabled()) return send(res, 404, { error: 'Accounts are not switched on for this site.' })
+  if (!req.headers['content-type']?.startsWith('application/json')) return send(res, 415, { error: 'JSON only' })
+  if (!sameOrigin(req)) return send(res, 403, { error: 'Cross-site request refused' })
+  const b = bodies.signin.parse(await readJson(req))
+  if (!(await loginAllowed(clientId(req), b.username))) return send(res, 429, { error: 'Too many attempts. Wait a few minutes and try again.' })
+  const who = await checkLogin(b.username, b.password)
+  if (!who) {
+    await new Promise(r => setTimeout(r, 300))
+    return send(res, 401, { error: 'Wrong username or password.' })
+  }
+  res.setHeader('set-cookie', userCookie(makeUserToken(who.id), secure))
+  send(res, 200, { ok: true })
+}
+
+/** Delete an account and all of its saved data. Needs the password again. */
+async function deleteAccount(req: IncomingMessage, res: ServerResponse, tenant: { kind: 'user'; id: string }, secure: boolean) {
+  if (!req.headers['content-type']?.startsWith('application/json')) return send(res, 415, { error: 'JSON only' })
+  const { password } = bodies.confirm.parse(await readJson(req))
+  const profile = await withStore(async () => readSaved<{ username?: string }>(PROFILE, {}), { tenant })
+  const who = profile.username ? await checkLogin(profile.username, password) : null
+  if (!who || who.id !== tenant.id) return send(res, 403, { error: 'Wrong password.' })
+  await removeAccount(who.username, tenant.id)
+  res.setHeader('set-cookie', clearedUserCookie(secure))
+  send(res, 200, { ok: true })
+}
+
+/** A signed-in account: private data, its own wallet signs everything, no server-side keys, only the calls below. */
+async function userRoute(req: IncomingMessage, res: ServerResponse, method: string, path: string, url: URL, secure: boolean) {
+  if (!usersEnabled()) return send(res, 404, { error: 'Accounts are not switched on for this site.' })
+  const id = userIdFrom(req)
+  if (!id) return send(res, 401, { error: 'Sign in first.', code: 'signin_required' })
+  if (method !== 'GET' && !sameOrigin(req)) return send(res, 403, { error: 'Cross-site request refused' })
+  const tenant = { kind: 'user' as const, id }
+  if (method === 'POST' && path === '/api/account/delete') return await deleteAccount(req, res, tenant, secure)
+  if (!USER_ALLOWED.has(`${method} ${path}`)) return send(res, 403, { error: 'That is not available for accounts.' })
+  if ((method === 'POST' || path === '/api/wallet') && !(await withinRateLimit('acct-act:' + id, USER_LIMITS.actionsPerDay, 86400))) return send(res, 429, { error: 'Daily action limit reached. Try again tomorrow.' })
+  return await withStore(
+    async () => {
+      // The session token is stateless, so a deleted account's cookie must stop working: no profile means no account.
+      if (!readSaved<{ username?: string }>(PROFILE, {}).username) {
+        res.setHeader('set-cookie', clearedUserCookie(secure))
+        return send(res, 401, { error: 'Sign in first.', code: 'signin_required' })
+      }
+      return route(req, res, method, path, url)
+    },
+    { lock: method !== 'GET', tenant }
+  )
+}
+
+/** Anonymous try-it sessions: private, dry run only, capped, and isolated from the owner's data. */
+async function startSandbox(req: IncomingMessage, res: ServerResponse, secure: boolean) {
+  if (!sandboxEnabled()) return send(res, 404, { error: 'The sandbox is not switched on for this site.' })
+  if (!sameOrigin(req)) return send(res, 403, { error: 'Cross-site request refused' })
+  const ok = await canStartSandbox(clientId(req))
+  if (!ok.ok) return send(res, 429, { error: ok.message })
+  res.setHeader('set-cookie', sandboxCookie(makeSandboxToken(makeSandboxId()), secure))
+  send(res, 200, { ok: true })
+}
+
+async function sandboxRoute(req: IncomingMessage, res: ServerResponse, method: string, path: string, url: URL) {
+  if (!sandboxEnabled()) return send(res, 404, { error: 'The sandbox is not switched on for this site.' })
+  const id = sandboxIdFrom(req)
+  if (!id) return send(res, 401, { error: 'Start a sandbox first.', code: 'sandbox_required' })
+  if (method !== 'GET' && !sameOrigin(req)) return send(res, 403, { error: 'Cross-site request refused' })
+  if (!SANDBOX_ALLOWED.has(`${method} ${path}`)) return send(res, 403, { error: 'That is not available in the sandbox.' })
+  if (method === 'POST' && !(await actionAllowed(id))) return send(res, 429, { error: 'This sandbox reached its daily limit. Start a new one, or come back tomorrow.' })
+  return await withStore(() => route(req, res, method, path, url), { lock: method !== 'GET', tenant: { kind: 'sandbox', id } })
 }
 
 export interface HandleOptions {
@@ -205,10 +312,33 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, o
     const path = url.pathname
     const method = req.method ?? 'GET'
     const secure = hosted() || req.headers['x-forwarded-proto'] === 'https'
+    // The sandbox page tells us it is a sandbox request. That can only ever reduce access, never widen it.
+    const sandboxMode = req.headers['x-ledgerly-mode'] === 'sandbox'
+    const userMode = req.headers['x-ledgerly-mode'] === 'user'
 
     // Public endpoints
     if (method === 'GET' && path === '/api/health') return send(res, 200, { ok: true })
-    if (method === 'GET' && path === '/api/session') return send(res, 200, { authRequired: authRequired(), authed: !authRequired() || isAuthed(req) })
+    if (method === 'GET' && path === '/api/session') {
+      if (userMode) {
+        const uid = usersEnabled() ? userIdFrom(req) : null
+        const active = uid ? await withStore(async () => Boolean(readSaved<{ username?: string }>(PROFILE, {}).username), { tenant: { kind: 'user', id: uid } }) : false
+        if (uid && !active) res.setHeader('set-cookie', clearedUserCookie(secure))
+        return send(res, 200, { user: { enabled: usersEnabled(), active } })
+      }
+      if (sandboxMode) return send(res, 200, { sandbox: { enabled: sandboxEnabled(), active: sandboxEnabled() && Boolean(sandboxIdFrom(req)) } })
+      return send(res, 200, { authRequired: authRequired(), authed: !authRequired() || isAuthed(req), sandboxEnabled: sandboxEnabled(), accountsEnabled: usersEnabled() })
+    }
+    if (method === 'POST' && path === '/api/signup') return await signup(req, res, secure)
+    if (method === 'POST' && path === '/api/signin') return await signin(req, res, secure)
+    if (method === 'POST' && path === '/api/signout') {
+      res.setHeader('set-cookie', clearedUserCookie(secure))
+      return send(res, 200, { ok: true })
+    }
+    if (method === 'POST' && path === '/api/sandbox') return await startSandbox(req, res, secure)
+    if (method === 'POST' && path === '/api/sandbox/end') {
+      res.setHeader('set-cookie', clearedSandboxCookie(secure))
+      return send(res, 200, { ok: true })
+    }
     if (method === 'POST' && path === '/api/login') return await login(req, res, secure)
     if (method === 'POST' && path === '/api/logout') {
       res.setHeader('set-cookie', clearedCookie(secure))
@@ -218,6 +348,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, o
 
     if (method === 'GET' && !path.startsWith('/api/') && opts.serveFiles && serveStatic(res, path)) return
     if (!path.startsWith('/api/')) return send(res, 404, { error: 'Not found' })
+
+    if (userMode) return await userRoute(req, res, method, path, url, secure)
+    if (sandboxMode) return await sandboxRoute(req, res, method, path, url)
 
     // Everything else is behind the login. Hosted mode fails closed if the password is missing or weak.
     const problem = authConfigProblem()

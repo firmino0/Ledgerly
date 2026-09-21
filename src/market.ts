@@ -35,10 +35,25 @@ export function parseQuote(symbol: string, body: unknown): Quote {
   }
 }
 
+/**
+ * GET with a couple of retries. Reusing an idle connection the server already closed makes the first request fail in
+ * Node ("fetch failed"); the next one works. A short retry hides that from the person using the app.
+ */
+export async function fetchWithRetry(url: string, tries = 3): Promise<Response> {
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fetch(url, { signal: AbortSignal.timeout(10_000) })
+    } catch {
+      if (i < tries - 1) await new Promise(r => setTimeout(r, 250 * (i + 1)))
+    }
+  }
+  throw new Error('Could not reach the Robinhood price service. Please try again in a moment.')
+}
+
 export async function getQuote(symbol: string): Promise<Quote> {
   const sym = symbol.trim().toUpperCase()
   if (!/^[A-Z0-9.]{1,10}$/.test(sym)) throw new Error(`Invalid symbol: ${symbol}`)
-  const res = await fetch(`${BASE}/prices/${sym}`, { signal: AbortSignal.timeout(10_000) })
+  const res = await fetchWithRetry(`${BASE}/prices/${sym}`)
   if (!res.ok) throw new Error(`Price API returned ${res.status} for ${sym}`)
   return parseQuote(sym, await res.json())
 }

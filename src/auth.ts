@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage } from 'node:http'
 
 /**
@@ -85,3 +85,49 @@ export function sameOrigin(req: IncomingMessage): boolean {
   const site = req.headers['sec-fetch-site']
   return !site || site === 'same-origin' || site === 'none'
 }
+
+// ---------- sandbox sessions ----------
+// A visitor to /sandbox gets an anonymous session: a random id, signed so it cannot be forged or guessed for someone else.
+const SB_COOKIE = 'ledgerly_sb'
+export const SANDBOX_SESSION_SECONDS = 24 * 3600
+
+export const makeSandboxId = () => randomBytes(16).toString('base64url')
+const sbSign = (id: string) => createHmac('sha256', secret()).update('sandbox:' + id).digest('base64url')
+export const makeSandboxToken = (id: string) => `${id}.${sbSign(id)}`
+
+/** The sandbox id inside a valid token, or null. */
+export function verifySandboxToken(token: string | undefined): string | null {
+  if (!token) return null
+  const [id, sig, extra] = token.split('.')
+  if (!id || !sig || extra !== undefined || !/^[A-Za-z0-9_-]{16,32}$/.test(id)) return null
+  return safeEqual(sig, sbSign(id)) ? id : null
+}
+
+export const sandboxIdFrom = (req: IncomingMessage) => verifySandboxToken(parseCookies(req.headers.cookie)[SB_COOKIE])
+export const sandboxCookie = (token: string, secure: boolean) => `${SB_COOKIE}=${token}; ${flags(secure)}; Max-Age=${SANDBOX_SESSION_SECONDS}`
+export const clearedSandboxCookie = (secure: boolean) => `${SB_COOKIE}=; ${flags(secure)}; Max-Age=0`
+
+// ---------- account sessions ----------
+const USER_COOKIE = 'ledgerly_user'
+export const USER_SESSION_SECONDS = 7 * 24 * 3600
+
+const userSign = (id: string, exp: string) => createHmac('sha256', secret()).update(`user:${id}.${exp}`).digest('base64url')
+export function makeUserToken(id: string, nowMs = Date.now()): string {
+  const exp = String(Math.floor(nowMs / 1000) + USER_SESSION_SECONDS)
+  return `${id}.${exp}.${userSign(id, exp)}`
+}
+
+/** The account id inside a valid, unexpired token, or null. */
+export function verifyUserToken(token: string | undefined, nowMs = Date.now()): string | null {
+  if (!token) return null
+  const parts = token.split('.')
+  if (parts.length !== 3) return null
+  const [id, exp, sig] = parts
+  if (!/^[A-Za-z0-9_-]{8,32}$/.test(id) || !/^\d+$/.test(exp) || !sig) return null
+  if (Number(exp) < nowMs / 1000) return null
+  return safeEqual(sig, userSign(id, exp)) ? id : null
+}
+
+export const userIdFrom = (req: IncomingMessage) => verifyUserToken(parseCookies(req.headers.cookie)[USER_COOKIE])
+export const userCookie = (token: string, secure: boolean) => `${USER_COOKIE}=${token}; ${flags(secure)}; Max-Age=${USER_SESSION_SECONDS}`
+export const clearedUserCookie = (secure: boolean) => `${USER_COOKIE}=; ${flags(secure)}; Max-Age=0`

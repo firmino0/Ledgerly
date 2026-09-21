@@ -1,0 +1,80 @@
+{
+  "network": "mainnet",
+  "dryRun": true,
+  "liveBlocked": null,
+  "signing": false,
+  "hosted": false,
+  "sandbox": false,
+  "store": "demo",
+  "explorer": "https://robinhoodchain.blockscout.com/tx/",
+  "wallet": null,
+  "balance": "unconfigured",
+  "policy": { "maxPerTx": 200, "maxPerDay": 500, "approvalThreshold": 25 },
+  "spentToday": 27,
+  "payees": [
+    { "address": "0xa11ce00000000000000000000000000000000001", "label": "Alice (designer)" },
+    { "address": "0xb0b0000000000000000000000000000000000002", "label": "Bob (copywriter)" }
+  ],
+  "pending": [
+    { "id": "demo0001", "kind": "trade", "module": "rebalance", "amountUsd": 112.9, "label": "Sell NVDA", "to": "", "agoMin": 6 },
+    { "id": "demo0002", "kind": "trade", "module": "rebalance", "amountUsd": 101.6, "label": "Buy AAPL", "to": "", "agoMin": 6 },
+    { "id": "demo0003", "kind": "pay", "module": "payroll", "amountUsd": 35, "label": "Logo milestone", "to": "0xa11ce00000000000000000000000000000000001", "agoMin": 41 }
+  ],
+  "paper": { "cashUsd": 288.7, "holdings": { "NVDA": 2.3, "AAPL": 0.5922 } },
+  "portfolio": {
+    "cfg": { "targets": { "NVDA": 40, "AAPL": 30 }, "driftThresholdPct": 5, "minTradeUsd": 1 },
+    "source": "paper",
+    "plan": {
+      "totalUsd": 1000,
+      "cashUsd": 288.7,
+      "cashPct": 28.87,
+      "cashTargetPct": 30,
+      "rows": [
+        { "symbol": "NVDA", "valueUsd": 512.9, "currentPct": 51.29, "targetPct": 40, "driftPct": 11.29 },
+        { "symbol": "AAPL", "valueUsd": 198.4, "currentPct": 19.84, "targetPct": 30, "driftPct": -10.16 }
+      ],
+      "trades": [
+        { "side": "sell", "symbol": "NVDA", "amountUsd": 112.9 },
+        { "side": "buy", "symbol": "AAPL", "amountUsd": 101.6 }
+      ]
+    }
+  },
+  "plans": [
+    { "id": "demoplan1", "symbol": "NVDA", "amountUsd": 30, "intervalHours": 24, "createdAt": "2026-09-14T09:00:00.000Z", "lastAgoMin": 310, "active": true },
+    { "id": "demoplan2", "symbol": "AAPL", "amountUsd": 10, "intervalHours": 48, "createdAt": "2026-09-16T09:00:00.000Z", "lastAgoMin": 1500, "active": true }
+  ],
+  "ledger": [
+    {
+      "agoMin": 6, "module": "rebalance", "action": "Sell NVDA", "amountUsd": 112.9, "verdict": "needs_approval", "executed": false, "dryRun": true,
+      "reasoning": "Amount 112.9 is above the auto-approve threshold 25. NVDA is 11.3 points over its 40% target after a rally, so trimming it back is consistent with the plan. Risk to flag: selling realises any gain, and the price can move before you approve, so the swap is checked against a 0.5% slippage limit."
+    },
+    {
+      "agoMin": 6, "module": "rebalance", "action": "Buy AAPL", "amountUsd": 101.6, "verdict": "needs_approval", "executed": false, "dryRun": true,
+      "reasoning": "Amount 101.6 is above the auto-approve threshold 25. AAPL is 10.2 points under its 30% target, and the proceeds from the NVDA sale fund this buy, so the two trades belong together."
+    },
+    {
+      "agoMin": 41, "module": "payroll", "action": "Logo milestone", "amountUsd": 35, "to": "0xa11ce00000000000000000000000000000000001", "verdict": "needs_approval", "executed": false, "dryRun": true,
+      "reasoning": "Amount 35 is above the auto-approve threshold 25. The recipient is on your allowlist and the memo names a specific milestone, so this looks routine. It waits for you only because of the amount."
+    },
+    {
+      "agoMin": 55, "module": "bills", "action": "Unknown vendor", "amountUsd": 20, "to": "0xdead00000000000000000000000000000000beef", "verdict": "deny", "executed": false, "dryRun": true,
+      "reasoning": "Recipient 0xdead…beef is not on the allowlist. Payments to an address that was never registered are always refused, whatever the amount or the explanation given."
+    },
+    {
+      "agoMin": 310, "module": "dca", "action": "Buy NVDA: ~0.0672 tokens via 0.05% pool @ $222.66 (ask 223)", "amountUsd": 15, "verdict": "allow", "executed": true, "dryRun": true,
+      "reasoning": "The price sits near the top of today's range, so I bought half of the planned $30 instead of the full amount. That keeps the recurring purchase disciplined without trying to time the market. [serv, x0.5]"
+    },
+    {
+      "agoMin": 312, "module": "payroll", "action": "Website copy", "amountUsd": 12, "to": "0xb0b0000000000000000000000000000000000002", "verdict": "allow", "executed": true, "dryRun": true,
+      "reasoning": "Amount 12 is within your auto-approve line and the recipient is on the allowlist, so it went through as a simulated payment."
+    },
+    {
+      "agoMin": 1500, "module": "dca", "action": "Skip AAPL", "verdict": "allow", "executed": false, "dryRun": true,
+      "reasoning": "Trading is halted for this asset."
+    },
+    {
+      "agoMin": 2900, "module": "rebalance", "action": "Rebalance check", "verdict": "allow", "executed": false, "dryRun": true,
+      "reasoning": "Portfolio is within 5 points of target. No trades needed."
+    }
+  ]
+}

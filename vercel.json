@@ -3,7 +3,12 @@
   "buildCommand": null,
   "outputDirectory": "web",
   "cleanUrls": true,
-  "rewrites": [{ "source": "/api/(.*)", "destination": "/api" }],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/demo", "destination": "/app.html" },
+    { "source": "/sandbox", "destination": "/app.html" },
+    { "source": "/me", "destination": "/app.html" }
+  ],
   "crons": [{ "path": "/api/cron", "schedule": "0 9 * * *" }],
   "headers": [
     {

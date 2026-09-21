@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Account &middot; Ledgerly</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/assets/fonts/newsreader-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/login.css">
+<script src="/assets/theme.js"></script>
+</head>
+<body>
+<main class="login">
+  <a class="brand" href="/" aria-label="Ledgerly website">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="4"/><g stroke-width="2" stroke-linecap="square"><path d="M9 8v16"/><path d="M9 24h14"/><path d="M14 12h9"/><path d="M14 17h9"/></g></svg>
+    <span>Ledgerly</span>
+  </a>
+
+  <h1 id="title">Your account</h1>
+  <p class="muted" id="lede">Your own private Ledgerly, using your own wallet. You sign every transaction yourself.</p>
+
+  <div class="tabs" role="tablist" aria-label="Account">
+    <button class="tab" type="button" role="tab" id="tab-in" aria-selected="true" aria-controls="form-in">Sign in</button>
+    <button class="tab" type="button" role="tab" id="tab-up" aria-selected="false" aria-controls="form-up">Create account</button>
+  </div>
+
+  <p id="off" class="error" role="alert" hidden>Accounts are not switched on for this site.</p>
+
+  <form id="form-in" class="form-login" autocomplete="on" role="tabpanel" aria-labelledby="tab-in">
+    <label class="field"><span>Username</span><input id="in-user" name="username" autocomplete="username" required></label>
+    <label class="field"><span>Password</span><input id="in-pass" name="password" type="password" autocomplete="current-password" required></label>
+    <p class="error in-error" role="alert" hidden></p>
+    <button class="btn btn-primary" type="submit">Sign in</button>
+  </form>
+
+  <form id="form-up" class="form-login" autocomplete="on" role="tabpanel" aria-labelledby="tab-up" hidden>
+    <label class="field"><span>Username <small class="muted">3 to 24 letters, numbers or underscores</small></span><input id="up-user" name="username" autocomplete="username" required minlength="3" maxlength="24"></label>
+    <label class="field"><span>Password <small class="muted">at least 10 characters</small></span><input id="up-pass" name="password" type="password" autocomplete="new-password" required minlength="10" maxlength="128"></label>
+    <div class="risk">
+      <p><strong>Before you start</strong></p>
+      <ul>
+        <li>This is experimental software. Transactions use <strong>real funds from your own wallet</strong> on Robinhood Chain.</li>
+        <li>You sign every transaction yourself. Ledgerly never holds your keys and cannot move your money.</li>
+        <li>There is no email, so <strong>a forgotten password cannot be recovered</strong>. Your wallet and funds are not affected.</li>
+        <li>Start with a small amount. Nothing here is financial advice.</li>
+      </ul>
+      <label class="check"><input id="up-accept" type="checkbox" required><span>I understand, and I want to continue.</span></label>
+    </div>
+    <p class="error up-error" role="alert" hidden></p>
+    <button class="btn btn-primary" type="submit">Create account</button>
+  </form>
+
+  <p class="foot"><a href="/">&larr; Back to the website</a></p>
+</main>
+<script src="/assets/account.js"></script>
+</body>
+</html>

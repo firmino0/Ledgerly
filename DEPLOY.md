@@ -84,6 +84,44 @@ Do this only after the dry run works.
 
 Start with a $1 plan, and check the transaction on the block explorer link in the Ledger.
 
+## Letting other people use it
+
+Your own dashboard (`/app`, behind your password) stays private. There are three ways to let other people, such as hackathon judges, try Ledgerly. Each is separate and **off unless you switch it on**.
+
+| Page | What it is | Money | Switch it on with |
+|---|---|---|---|
+| `/demo` | The dashboard with sample data. Every action is switched off. | None | Nothing. It is always available. |
+| `/sandbox` | A private practice copy for each visitor, no sign-up. | Simulated only | `SANDBOX_ENABLED=yes` |
+| `/account` | Real accounts (username and password). Live, using the person's **own wallet**. | Real, theirs | `USERS_ENABLED=yes` |
+
+Both `/sandbox` and `/account` also need Redis and `AUTH_SECRET` (already set in step 3).
+
+### Real accounts: what to know before you enable them
+- **Non-custodial.** Every action is signed in the person's own browser wallet. Accounts have **no server-side key**, so your agent wallet can never be reached from an account. This is enforced in code and covered by tests.
+- **Everything is held for their signature.** The account limits (`USER_MAX_PER_TX`, default 25, and `USER_MAX_PER_DAY`, default 100, in USD) apply on top.
+- **Live selling and rebalancing are off for accounts** (`USERS_ALLOW_SELLS`). Selling has not been run on-chain yet, so strangers should not be the first test. Set `USERS_ALLOW_SELLS=yes` only after you have tried a sale yourself.
+- Accounts follow the site's live setting. With `DRY_RUN=true` they use a simulated portfolio, with `DRY_RUN=false` and `LIVE_MAINNET=yes` they are live.
+- There is no email, so a forgotten password cannot be recovered. People can delete their own account and data from the dashboard.
+- Sign-ups are rate limited per connection and per day (`USERS_MAX_SIGNUPS_PER_DAY`, default 100). Passwords are stored as salted scrypt hashes.
+- Ledgerly is experimental software and this is not financial advice. Anyone offering real accounts to the public should decide for themselves whether that is appropriate.
+
+### The sandbox
+Each visitor gets an isolated, expiring dry-run copy with a $1,000 practice portfolio. It cannot reach a wallet or your data. To protect your model credit it has caps: `SANDBOX_MODEL_CALLS_PER_SESSION` (default 20) and `SANDBOX_MODEL_CALLS_PER_DAY` (default 300). Past a cap, the plain rules run instead of the model. `SANDBOX_MAX_SESSIONS` (default 500 a day) limits how many can start.
+
+### Settings for the public modes
+
+| Name | Default | Meaning |
+|---|---|---|
+| `SANDBOX_ENABLED` | off | `yes` turns on `/sandbox` |
+| `SANDBOX_MODEL_CALLS_PER_SESSION` | 20 | model calls per sandbox per day |
+| `SANDBOX_MODEL_CALLS_PER_DAY` | 300 | model calls across all sandboxes per day |
+| `SANDBOX_MAX_SESSIONS` | 500 | new sandboxes per day |
+| `USERS_ENABLED` | off | `yes` turns on `/account` |
+| `USER_MAX_PER_TX` | 25 | most one account can send in one transaction (USD) |
+| `USER_MAX_PER_DAY` | 100 | most one account can send in a day (USD) |
+| `USERS_ALLOW_SELLS` | off | `yes` allows live selling and rebalancing for accounts |
+| `USERS_MAX_SIGNUPS_PER_DAY` | 100 | new accounts per day |
+
 ## Security notes
 
 - The login sets a signed cookie (`HttpOnly`, `SameSite=Strict`, `Secure`) that lasts 12 hours (`SESSION_HOURS` to change). Failed logins are rate-limited to 8 a minute per address.

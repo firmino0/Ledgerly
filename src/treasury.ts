@@ -1,6 +1,8 @@
 import { addPending, type PayRequest, payeeSet } from './approvals.js'
 import { sendPayment } from './chain.js'
 import { config } from './config.js'
+import { dryRun, policy } from './mode.js'
+import { isUser } from './store.js'
 import { evaluate } from './guardrails.js'
 import { type LedgerEntry, readAll, record, spentToday } from './ledger.js'
 import { explain } from './reasoning.js'
@@ -16,10 +18,11 @@ export interface PayResult {
 }
 
 const entry = (req: PayRequest, verdict: LedgerEntry['verdict'], executed: boolean, reasoning: string, extra: Partial<LedgerEntry> = {}) =>
-  record({ module: req.module, action: req.memo, amountUsd: req.amountUsd, to: req.to, verdict, executed, dryRun: config.dryRun, reasoning, ...extra })
+  record({ module: req.module, action: req.memo, amountUsd: req.amountUsd, to: req.to, verdict, executed, dryRun: dryRun(), reasoning, ...extra })
 
 async function execute(req: PayRequest, reasoning: string, verdict: LedgerEntry['verdict']): Promise<PayResult> {
-  if (config.dryRun) {
+  if (isUser() && !dryRun()) throw new Error('Accounts sign their own transactions, so nothing is sent from the server. Use "Sign with my wallet".')
+  if (dryRun()) {
     entry(req, verdict, true, reasoning)
     return { status: 'dry_run', message: `DRY RUN: would pay ${req.amountUsd} to ${req.to}. ${reasoning}` }
   }
@@ -36,7 +39,7 @@ async function execute(req: PayRequest, reasoning: string, verdict: LedgerEntry[
 
 /** Single path for every outgoing payment (payroll and bills). The model never bypasses this. */
 export async function pay(req: PayRequest): Promise<PayResult> {
-  const verdict = evaluate(config.policy, req, spentToday(readAll()), payeeSet())
+  const verdict = evaluate(policy(), req, spentToday(readAll()), payeeSet())
   const context = `Module: ${req.module}. Memo: ${req.memo}. Amount: ${req.amountUsd}. To: ${req.to}. Verdict: ${verdict.decision}${'reason' in verdict ? ` (${verdict.reason})` : ''}.`
   const reasoning = await explain(context)
 
@@ -54,7 +57,7 @@ export async function pay(req: PayRequest): Promise<PayResult> {
 
 /** Run a payment a human has approved. Per-tx cap, daily cap and allowlist are re-checked. */
 export async function executeApprovedPayment(req: PayRequest, approvalId: string): Promise<PayResult> {
-  const recheck = evaluate({ ...config.policy, approvalThreshold: Infinity }, req, spentToday(readAll()), payeeSet())
+  const recheck = evaluate({ ...policy(), approvalThreshold: Infinity }, req, spentToday(readAll()), payeeSet())
   if (recheck.decision === 'deny') {
     entry(req, 'deny', false, `Approved but blocked: ${recheck.reason}`)
     return { status: 'denied', message: `Blocked on re-check: ${recheck.reason}` }

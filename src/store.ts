@@ -16,21 +16,25 @@ import { fileURLToPath } from 'node:url'
 export interface Backend {
   name: string
   load(keys: string[]): Promise<Record<string, unknown>>
-  save(entries: Record<string, unknown>): Promise<void>
-  /** Returns a release function, or null if the lock is taken. */
-  lock(ttlMs: number): Promise<(() => Promise<void>) | null>
+  /** ttlSeconds makes the saved keys expire (used for throwaway sandbox data). */
+  save(entries: Record<string, unknown>, ttlSeconds?: number): Promise<void>
+  /** Returns a release function, or null if the named lock is taken. */
+  lock(name: string, ttlMs: number): Promise<(() => Promise<void>) | null>
   /** Increment a counter that expires after ttlSeconds (used for login rate limiting). */
   incr(key: string, ttlSeconds: number): Promise<number>
+  /** Create a key only if it does not exist yet. False if it was already there. */
+  create(key: string, value: unknown): Promise<boolean>
+  remove(keys: string[]): Promise<void>
 }
 
 const PREFIX = 'ledgerly:'
-export const STORE_KEYS = ['state.json', 'paper.json', 'portfolio.json', 'dca.json', 'ledger.json', 'prepared.json']
+export const STORE_KEYS = ['state.json', 'paper.json', 'portfolio.json', 'dca.json', 'ledger.json', 'prepared.json', 'profile.json']
 
 /** In-process backend for tests and for trying hosted mode locally (LEDGERLY_STORE=memory). Not shared between processes. */
 export function memoryBackend(): Backend {
   const data = new Map<string, unknown>()
   const counters = new Map<string, { n: number; exp: number }>()
-  let locked = false
+  const locks = new Set<string>()
   return {
     name: 'memory',
     async load(keys) {
@@ -39,11 +43,11 @@ export function memoryBackend(): Backend {
     async save(entries) {
       for (const [k, v] of Object.entries(entries)) data.set(k, structuredClone(v))
     },
-    async lock() {
-      if (locked) return null
-      locked = true
+    async lock(name) {
+      if (locks.has(name)) return null
+      locks.add(name)
       return async () => {
-        locked = false
+        locks.delete(name)
       }
     },
     async incr(key, ttlSeconds) {
@@ -54,6 +58,14 @@ export function memoryBackend(): Backend {
         return 1
       }
       return ++c.n
+    },
+    async create(key, value) {
+      if (data.has(key)) return false
+      data.set(key, structuredClone(value))
+      return true
+    },
+    async remove(keys) {
+      for (const k of keys) data.delete(k)
     }
   }
 }
@@ -70,17 +82,22 @@ function upstashBackend(url: string, token: string): Backend {
       const values = await r.mget<unknown[]>(...keys)
       return Object.fromEntries(keys.map((k, i) => [k, values[i] ?? null]))
     },
-    async save(entries) {
+    async save(entries, ttlSeconds) {
       if (!Object.keys(entries).length) return
-      await (await redis()).mset(entries)
+      const r = await redis()
+      if (!ttlSeconds) return void (await r.mset(entries))
+      const p = r.pipeline()
+      for (const [k, v] of Object.entries(entries)) p.set(k, v, { ex: ttlSeconds })
+      await p.exec()
     },
-    async lock(ttlMs) {
+    async lock(name, ttlMs) {
       const r = await redis()
       const mine = randomUUID()
-      const ok = await r.set(PREFIX + 'lock', mine, { nx: true, px: ttlMs })
+      const key = PREFIX + 'lock:' + name
+      const ok = await r.set(key, mine, { nx: true, px: ttlMs })
       if (ok !== 'OK') return null
       return async () => {
-        await r.eval(RELEASE_LOCK, [PREFIX + 'lock'], [mine]).catch(() => undefined)
+        await r.eval(RELEASE_LOCK, [key], [mine]).catch(() => undefined)
       }
     },
     async incr(key, ttlSeconds) {
@@ -88,6 +105,12 @@ function upstashBackend(url: string, token: string): Backend {
       const n = await r.incr(PREFIX + key)
       if (n === 1) await r.expire(PREFIX + key, ttlSeconds)
       return n
+    },
+    async create(key, value) {
+      return (await (await redis()).set(key, value, { nx: true })) === 'OK'
+    },
+    async remove(keys) {
+      if (keys.length) await (await redis()).del(...keys)
     }
   }
 }
@@ -108,9 +131,20 @@ export function setBackendForTests(b: Backend | null) {
 }
 
 // ---------- per-request context (remote mode) ----------
+/** Who a request works for, beyond the owner: a throwaway sandbox visitor, or a signed-in account. Each gets private data. */
+export interface Tenant {
+  kind: 'sandbox' | 'user'
+  id: string
+}
+
+const tenantPrefix = (t?: Tenant) => PREFIX + (t ? (t.kind === 'sandbox' ? `sb:${t.id}:` : `u:${t.id}:`) : '')
+
 interface Ctx {
   cache: Map<string, unknown>
   dirty: Set<string>
+  /** Key prefix, so one tenant can never see the owner's data or another tenant's. */
+  prefix: string
+  tenant?: Tenant
 }
 const als = new AsyncLocalStorage<Ctx>()
 
@@ -120,17 +154,24 @@ function ctx(): Ctx {
   return c
 }
 
+/** Sandbox data is throwaway: it expires by itself. */
+const SANDBOX_TTL_SECONDS = 48 * 3600
+
+export const isSandbox = () => als.getStore()?.tenant?.kind === 'sandbox'
+export const isUser = () => als.getStore()?.tenant?.kind === 'user'
+export const currentTenant = () => als.getStore()?.tenant
+
 async function flush(c: Ctx) {
   if (!backend || !c.dirty.size) return
   const entries: Record<string, unknown> = {}
   for (const k of c.dirty) entries[k] = c.cache.get(k)
-  await backend.save(entries)
+  await backend.save(entries, c.tenant?.kind === 'sandbox' ? SANDBOX_TTL_SECONDS : undefined)
   c.dirty.clear()
 }
 
-async function acquire(): Promise<() => Promise<void>> {
+async function acquire(name: string): Promise<() => Promise<void>> {
   for (let i = 0; i < 40; i++) {
-    const release = await backend!.lock(60_000)
+    const release = await backend!.lock(name, 60_000)
     if (release) return release
     await new Promise(r => setTimeout(r, 250))
   }
@@ -142,12 +183,16 @@ async function acquire(): Promise<() => Promise<void>> {
  * on a private copy, and saves the changes afterwards. Pass `lock: true` for anything that changes state, so two
  * requests cannot overwrite each other.
  */
-export async function withStore<T>(fn: () => Promise<T>, opts: { lock?: boolean } = {}): Promise<T> {
-  if (!backend) return fn()
-  const release = opts.lock ? await acquire() : null
-  const c: Ctx = { cache: new Map(), dirty: new Set() }
+export async function withStore<T>(fn: () => Promise<T>, opts: { lock?: boolean; tenant?: Tenant } = {}): Promise<T> {
+  if (!backend) {
+    if (opts.tenant) throw new Error('Sandboxes and accounts need the hosted (Redis) store so each person stays separate.')
+    return fn()
+  }
+  const prefix = tenantPrefix(opts.tenant)
+  const release = opts.lock ? await acquire(opts.tenant ? prefix : 'main') : null
+  const c: Ctx = { cache: new Map(), dirty: new Set(), prefix, tenant: opts.tenant }
   try {
-    const keys = STORE_KEYS.map(k => PREFIX + k)
+    const keys = STORE_KEYS.map(k => c.prefix + k)
     const loaded = await backend.load(keys)
     for (const k of keys) if (loaded[k] !== null && loaded[k] !== undefined) c.cache.set(k, loaded[k])
     return await als.run(c, fn)
@@ -165,13 +210,13 @@ export async function withStore<T>(fn: () => Promise<T>, opts: { lock?: boolean 
 export const dataPath = (name: string) =>
   backend ? PREFIX + name : process.env.LEDGERLY_DATA_DIR ? join(process.env.LEDGERLY_DATA_DIR, name) : fileURLToPath(new URL(`../data/${name}`, import.meta.url))
 
-/** A file path or key from either mode becomes the same remote key, whenever the caller computed it. */
-const remoteKey = (file: string) => (file.startsWith(PREFIX) ? file : PREFIX + basename(file))
+/** A file path or key from either mode becomes the same remote key in the caller's own namespace. */
+const remoteKey = (c: Ctx, file: string) => c.prefix + (file.startsWith(PREFIX) ? file.slice(PREFIX.length) : basename(file))
 
 export function readJson<T>(file: string, fallback: T): T {
   if (backend) {
     const c = ctx()
-    const key = remoteKey(file)
+    const key = remoteKey(c, file)
     return c.cache.has(key) ? (structuredClone(c.cache.get(key)) as T) : fallback
   }
   if (!existsSync(file)) return fallback
@@ -186,7 +231,7 @@ export function readJson<T>(file: string, fallback: T): T {
 export function writeJson(file: string, value: unknown): void {
   if (backend) {
     const c = ctx()
-    const key = remoteKey(file)
+    const key = remoteKey(c, file)
     c.cache.set(key, structuredClone(value))
     c.dirty.add(key)
     return
@@ -195,6 +240,26 @@ export function writeJson(file: string, value: unknown): void {
   const tmp = `${file}.tmp`
   writeFileSync(tmp, JSON.stringify(value, null, 2))
   renameSync(tmp, file)
+}
+
+// ---------- records outside any tenant (account logins) ----------
+function remote() {
+  if (!backend) throw new Error('Accounts need the hosted (Redis) store.')
+  return backend
+}
+const rawKey = (name: string) => PREFIX + name
+export async function rawGet<T>(name: string): Promise<T | null> {
+  const k = rawKey(name)
+  return ((await remote().load([k]))[k] ?? null) as T | null
+}
+/** Create a record only if the name is free. */
+export const rawCreate = (name: string, value: unknown) => remote().create(rawKey(name), value)
+export const rawSet = (name: string, value: unknown) => remote().save({ [rawKey(name)]: value })
+/** Delete a tenant's private data and any named records. */
+export async function rawRemove(names: string[], tenant?: Tenant) {
+  const keys = names.map(rawKey)
+  if (tenant) keys.push(...STORE_KEYS.map(k => tenantPrefix(tenant) + k))
+  await remote().remove(keys)
 }
 
 // ---------- rate limiting ----------

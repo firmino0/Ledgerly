@@ -1,5 +1,7 @@
 import OpenAI from 'openai'
 import { config } from './config.js'
+import { modelBudgetOk } from './sandbox.js'
+import { isSandbox } from './store.js'
 
 const client = new OpenAI({
   apiKey: config.servApiKey || 'missing',
@@ -46,6 +48,10 @@ function servTools(shadowHint?: string): OpenAI.Chat.Completions.ChatCompletionT
 /** Raw SERV Reasoning call. Returns null when no key is set or the API fails (see `lastError`). */
 export async function ask(system: string, user: string, opts: AskOptions = {}): Promise<string | null> {
   if (!config.servApiKey) return null
+  if (isSandbox() && !(await modelBudgetOk())) {
+    lastError = 'this sandbox has used its share of model calls, so the plain rules ran instead'
+    return null
+  }
   try {
     const res = await client.chat.completions.create({
       model: config.servModel,
@@ -66,8 +72,16 @@ export async function ask(system: string, user: string, opts: AskOptions = {}): 
   }
 }
 
-/** Ask SERV Reasoning to explain a decision; falls back to the raw context if unavailable. */
+/** True for a real explanation. Empty, very short or refusal-style replies ("I can't share that") are not worth logging. */
+export function usableExplanation(text: string | null): text is string {
+  if (!text) return false
+  const t = text.trim()
+  return t.length >= 40 && !/^(i\s+(can['’]?t|cannot|won['’]?t|am unable|['’]?m unable)|sorry|as an ai)/i.test(t)
+}
+
+/** Ask SERV Reasoning to explain a decision; falls back to the plain facts if it is unavailable or gives nothing usable. */
 export async function explain(context: string): Promise<string> {
   if (!config.servApiKey) return `(no SERV_API_KEY set) ${context}`
-  return (await ask(SYSTEM, context)) ?? `${context} (reasoning unavailable: ${lastError ?? 'empty reply'})`
+  const reply = await ask(SYSTEM, context)
+  return usableExplanation(reply) ? reply : `${context} (reasoning unavailable: ${lastError ?? 'the model gave no usable explanation'})`
 }

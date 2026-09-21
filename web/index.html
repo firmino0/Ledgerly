@@ -32,7 +32,7 @@
     </nav>
     <div class="top-actions">
       <button class="btn btn-quiet btn-sm" type="button" data-theme-toggle aria-label="Toggle light and dark theme">Theme</button>
-      <a class="btn btn-primary btn-sm" href="/app">Open dashboard</a>
+      <a class="btn btn-primary btn-sm" href="/demo">Demo</a>
     </div>
   </div>
 </header>
@@ -45,7 +45,9 @@
       <h1>The model proposes.<br><em>Code decides.</em></h1>
       <p class="lede">Ledgerly is a treasury agent on Robinhood Chain. It invests, rebalances and pays, and it writes down why. Every action passes the same set of rules the model cannot change.</p>
       <div class="cta">
-        <a class="btn btn-primary" href="/app">Open the dashboard</a>
+        <a class="btn btn-primary" href="/demo">See the demo</a>
+        <a class="btn btn-primary" href="/account#create" data-accounts hidden>Create an account</a>
+        <a class="btn" href="/sandbox" data-sandbox hidden>Try the sandbox</a>
         <a class="btn" href="#path">See how it decides</a>
       </div>
     </div>
@@ -203,7 +205,7 @@
       <div>
         <h3><span class="mark mark-allow">Tested</span></h3>
         <ul>
-          <li>34 unit tests across guardrails, rebalancing math, swap route selection, wallet transaction data and the read-only filter</li>
+          <li>77 unit tests across guardrails, rebalancing math, swap route selection, wallet transaction data, logins, account and sandbox isolation, and the read-only filter</li>
           <li>Three real mainnet transactions, all confirmed on Robinhood Chain: a buy signed with a connected wallet, a buy sent by the agent wallet, and a payment. The server also rejects any transaction that does not match what was prepared</li>
           <li>Live SERV Reasoning calls with Multipath, Prompt Guard and Shadow Agent</li>
           <li>Live onchain quotes on Robinhood Chain mainnet</li>
@@ -233,7 +235,8 @@ npm install
 cp .env.example .env    # add your SERV_API_KEY
 npm run dashboard       # then open http://localhost:3000/app</code></pre>
     <div class="cta">
-      <a class="btn btn-primary" href="/app">Open the dashboard</a>
+      <a class="btn btn-primary" href="/demo">See the demo</a>
+      <a class="btn" href="/sandbox" data-sandbox hidden>Try the sandbox</a>
       <a class="btn" href="https://github.com/firmino0/Ledgerly" rel="noopener">View the code on GitHub</a>
     </div>
   </section>
@@ -242,9 +245,11 @@ npm run dashboard       # then open http://localhost:3000/app</code></pre>
 <footer class="foot">
   <div class="wrap foot-row">
     <span>Ledgerly &middot; built for the SERV Hackathon, Edition 01</span>
-    <span class="muted">Set in Newsreader and IBM Plex</span>
+    <span class="muted">Set in Newsreader and IBM Plex &middot; <a href="/app">Owner sign in</a></span>
   </div>
 </footer>
+
+<script src="/assets/site.js"></script>
 
 
 </body>
