@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ledgerly</title>
 <meta name="description" content="A treasury agent on Robinhood Chain that invests, rebalances and pays, and writes down why. The model proposes; plain code decides.">
+<meta property="og:title" content="Ledgerly">
+<meta property="og:description" content="A treasury agent on Robinhood Chain that invests, rebalances and pays, and writes down why. The model proposes; plain code decides.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#f3efe6">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/assets/fonts/newsreader-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/tokens.css">
@@ -24,6 +28,7 @@
       <a href="#path">How it decides</a>
       <a href="#rules">Rules</a>
       <a href="#status">Status</a>
+      <a href="https://github.com/firmino0/Ledgerly" rel="noopener">GitHub</a>
     </nav>
     <div class="top-actions">
       <button class="btn btn-quiet btn-sm" type="button" data-theme-toggle aria-label="Toggle light and dark theme">Theme</button>
@@ -199,7 +204,7 @@
         <h3><span class="mark mark-allow">Tested</span></h3>
         <ul>
           <li>34 unit tests across guardrails, rebalancing math, swap route selection, wallet transaction data and the read-only filter</li>
-          <li>Signing with a connected wallet: the exact transactions checked with a simulated wallet, the server rejecting a transaction that does not match, and one real $0.50 NVDA buy signed and confirmed on Robinhood Chain mainnet</li>
+          <li>Three real mainnet transactions, all confirmed on Robinhood Chain: a buy signed with a connected wallet, a buy sent by the agent wallet, and a payment. The server also rejects any transaction that does not match what was prepared</li>
           <li>Live SERV Reasoning calls with Multipath, Prompt Guard and Shadow Agent</li>
           <li>Live onchain quotes on Robinhood Chain mainnet</li>
           <li>The dashboard end to end in dry run, including approvals and restarts</li>
@@ -208,7 +213,7 @@
       <div>
         <h3><span class="mark mark-hold">Not yet</span></h3>
         <ul>
-          <li>Live sells and payments, and the agent wallet sending on its own. The code is written; only one signed buy has run on mainnet</li>
+          <li>Live sells and live rebalancing. The code is written; only buys and one payment have run on mainnet</li>
           <li>Robinhood MCP with a real login. The connector is read-only and off by default</li>
         </ul>
       </div>
@@ -216,17 +221,20 @@
   </section>
 
   <!-- run -->
-  <section class="block wrap run">
+  <section id="run" class="block wrap run">
     <div class="block-head">
       <p class="eyebrow">Run it</p>
       <h2>Try it in paper mode</h2>
       <p class="sub">No wallet or funds needed. Real prices, real onchain quotes, a simulated portfolio.</p>
     </div>
-    <pre class="code" tabindex="0"><code>npm install
+    <pre class="code" tabindex="0"><code>git clone https://github.com/firmino0/Ledgerly
+cd Ledgerly
+npm install
 cp .env.example .env    # add your SERV_API_KEY
-npm run dashboard</code></pre>
+npm run dashboard       # then open http://localhost:3000/app</code></pre>
     <div class="cta">
       <a class="btn btn-primary" href="/app">Open the dashboard</a>
+      <a class="btn" href="https://github.com/firmino0/Ledgerly" rel="noopener">View the code on GitHub</a>
     </div>
   </section>
 </main>
@@ -237,6 +245,7 @@ npm run dashboard</code></pre>
     <span class="muted">Set in Newsreader and IBM Plex</span>
   </div>
 </footer>
+
 
 </body>
 </html>

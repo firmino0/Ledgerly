@@ -1,11 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
 import { config } from './config.js'
 import { record } from './ledger.js'
 import { getQuote, type Quote } from './market.js'
 import { ask } from './reasoning.js'
-import { dataPath } from './store.js'
+import { dataPath, readJson, writeJson } from './store.js'
 import { requestTrade } from './trading.js'
 
 export interface DcaPlan {
@@ -41,13 +39,8 @@ const MAX_MULT = 1.5
 const FILE = dataPath('dca.json')
 
 // ---------- persistence ----------
-function load(): DcaPlan[] {
-  return existsSync(FILE) ? (JSON.parse(readFileSync(FILE, 'utf8')) as DcaPlan[]) : []
-}
-function save(plans: DcaPlan[]): void {
-  if (!existsSync(dirname(FILE))) mkdirSync(dirname(FILE), { recursive: true })
-  writeFileSync(FILE, JSON.stringify(plans, null, 2))
-}
+const load = (): DcaPlan[] => readJson<DcaPlan[]>(FILE, [])
+const save = (plans: DcaPlan[]): void => writeJson(FILE, plans)
 
 export const listPlans = () => load()
 

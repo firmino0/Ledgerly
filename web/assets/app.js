@@ -63,6 +63,10 @@ const mark = e => {
 async function api(path, body) {
   const res = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
   const json = await res.json().catch(() => ({}))
+  if (res.status === 401 && path !== '/api/login') {
+    location.replace('/login')
+    throw new Error('Sign in required')
+  }
   if (!res.ok) throw new Error(json.error || `Request failed (${res.status})`)
   return json
 }
@@ -257,7 +261,10 @@ function queueList() {
           'div',
           { class: 'acts' },
           S.signing ? h('button', { class: 'btn btn-primary btn-sm', type: 'button', title: 'Your own wallet signs and sends this. The agent key is not used.', onclick: e => act(e.currentTarget, () => signWithWallet(p), r => r.message) }, 'Sign with my wallet') : null,
-          h('button', { class: 'btn btn-sm' + (S.signing ? '' : ' btn-primary'), type: 'button', title: S.signing ? "The agent's own wallet sends this within your limits." : null, onclick: e => confirmLive(`Approve ${p.label} for ${usd(p.amountUsd)}?`) && act(e.currentTarget, () => api('/api/approve', { id: p.id }), r => r.message || 'Approved') }, S.signing ? 'Let agent send' : 'Approve'),
+          // Live with no agent key on the server: the agent has no wallet to send from, so only signing (or rejecting) applies.
+          S.signing && !S.wallet
+            ? null
+            : h('button', { class: 'btn btn-sm' + (S.signing ? '' : ' btn-primary'), type: 'button', title: S.signing ? "The agent's own wallet sends this within your limits." : null, onclick: e => confirmLive(`Approve ${p.label} for ${usd(p.amountUsd)}?`) && act(e.currentTarget, () => api('/api/approve', { id: p.id }), r => r.message || 'Approved') }, S.signing ? 'Let agent send' : 'Approve'),
           h('button', { class: 'btn btn-sm', type: 'button', onclick: e => act(e.currentTarget, () => api('/api/reject', { id: p.id }), r => r.message) }, 'Reject')
         )
       )
@@ -604,6 +611,23 @@ if (provider()) {
   if (!wasOff()) provider().request({ method: 'eth_accounts' }).then(a => a[0] && setAccount(a[0])).catch(() => {})
   if (provider().on) provider().on('accountsChanged', a => !wasOff() && setAccount(a[0] || null))
 }
+
+// Sign-in: when the server has a password, send visitors without a session to the login page.
+fetch('/api/session')
+  .then(r => r.json())
+  .then(s => {
+    if (!s.authRequired) return
+    if (!s.authed) return void location.replace('/login')
+    $('#signout').hidden = false
+  })
+  .catch(() => {})
+$('#signout').addEventListener('click', async () => {
+  try {
+    await fetch('/api/logout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+  } finally {
+    location.replace('/login')
+  }
+})
 
 addEventListener('hashchange', route)
 document.addEventListener('visibilitychange', () => !document.hidden && refresh())

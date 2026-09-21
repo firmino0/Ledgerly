@@ -5,13 +5,14 @@ import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
 import { APPROVAL_TTL_MS, listPending } from './approvals.js'
 import { approveAny, rejectAny } from './approve.js'
+import { authConfigProblem, authRequired, checkPassword, clearedCookie, clientId, cronAuthorized, hosted, isAuthed, makeToken, sameOrigin, sessionCookie } from './auth.js'
 import { tokenBalance, walletAddress } from './chain.js'
 import { config, liveBlockedReason } from './config.js'
 import { cancelPlan, createPlan, listPlans, runDue } from './dca.js'
 import { readAll, spentToday } from './ledger.js'
 import { getPaper, resetPaper } from './paper.js'
 import { portfolioView, runRebalance, setTargets } from './portfolio.js'
-import { bumpVersion } from './store.js'
+import { backendName, bumpVersion, withinRateLimit, withStore } from './store.js'
 import { addPayee, listPayees, pay } from './treasury.js'
 import { completeSigned, prepareSigned, signingAvailable, walletBalances } from './walletSign.js'
 
@@ -39,6 +40,8 @@ async function state() {
     dryRun: config.dryRun,
     liveBlocked: liveBlockedReason,
     signing: signingAvailable(),
+    hosted: hosted(),
+    store: backendName(),
     explorer: EXPLORER,
     wallet: walletAddress() ?? null,
     balance: await tokenBalance().catch(() => 'unavailable'),
@@ -81,7 +84,7 @@ const TYPES: Record<string, string> = {
 
 /** Serve a file from web/. Refuses anything that resolves outside that folder or has an unknown extension. */
 function serveStatic(res: ServerResponse, urlPath: string): boolean {
-  const map: Record<string, string> = { '/': 'index.html', '/app': 'app.html', '/app/': 'app.html' }
+  const map: Record<string, string> = { '/': 'index.html', '/app': 'app.html', '/app/': 'app.html', '/login': 'login.html' }
   const rel = map[urlPath] ?? decodeURIComponent(urlPath).replace(/^\/+/, '')
   const file = resolve(WEB, rel)
   const inside = relative(WEB, file)
@@ -94,6 +97,13 @@ function serveStatic(res: ServerResponse, urlPath: string): boolean {
 }
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
+  // Vercel parses JSON bodies before our code runs and exposes them as req.body (reading the stream would find it empty).
+  const parsed = (req as { body?: unknown }).body
+  if (parsed !== undefined && parsed !== null) {
+    if (Buffer.isBuffer(parsed)) return JSON.parse(parsed.toString('utf8') || '{}')
+    if (typeof parsed === 'string') return JSON.parse(parsed || '{}')
+    return parsed
+  }
   let size = 0
   const chunks: Buffer[] = []
   for await (const c of req) {
@@ -104,74 +114,133 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
 }
 
+async function login(req: IncomingMessage, res: ServerResponse, secure: boolean) {
+  const problem = authConfigProblem()
+  if (problem) return send(res, 503, { error: problem })
+  if (!authRequired()) return send(res, 200, { ok: true }) // nothing to sign in to
+  if (!req.headers['content-type']?.startsWith('application/json')) return send(res, 415, { error: 'JSON only' })
+  if (!sameOrigin(req)) return send(res, 403, { error: 'Cross-site request refused' })
+  if (!(await withinRateLimit('login:' + clientId(req), 8, 60))) return send(res, 429, { error: 'Too many attempts. Wait a minute and try again.' })
+  const body = (await readJson(req)) as { password?: unknown }
+  if (!checkPassword(body.password)) {
+    await new Promise(r => setTimeout(r, 400)) // slows down guessing
+    return send(res, 401, { error: 'Wrong password.' })
+  }
+  res.setHeader('set-cookie', sessionCookie(makeToken(), secure))
+  send(res, 200, { ok: true })
+}
+
+/** Scheduled trigger (Vercel Cron, or any pinger) that runs due DCA plans. Needs `Authorization: Bearer CRON_SECRET`. */
+async function cron(req: IncomingMessage, res: ServerResponse) {
+  if (!cronAuthorized(req)) return send(res, 401, { error: 'Unauthorized' })
+  const results = await withStore(() => runDue(), { lock: true })
+  send(res, 200, { ran: results.length, results: results.map(r => ({ symbol: r.symbol, outcome: r.outcome })) })
+}
+
+async function route(req: IncomingMessage, res: ServerResponse, method: string, path: string, url: URL) {
+  if (method === 'GET' && path === '/api/state') return send(res, 200, await state())
+  if (method === 'GET' && path === '/api/wallet') return send(res, 200, await walletBalances(url.searchParams.get('account') ?? ''))
+
+  if (method === 'POST') {
+    if (!req.headers['content-type']?.startsWith('application/json')) return send(res, 415, { error: 'JSON only' })
+    const raw = await readJson(req)
+    switch (path) {
+      case '/api/dca': {
+        const b = bodies.dca.parse(raw)
+        return send(res, 200, createPlan(b.symbol, b.amountUsd, b.intervalHours))
+      }
+      case '/api/dca/run':
+        return send(res, 200, await runDue())
+      case '/api/dca/cancel':
+        return send(res, 200, { ok: cancelPlan(bodies.cancel.parse(raw).id) })
+      case '/api/payee': {
+        const b = bodies.payee.parse(raw)
+        addPayee(b.address, b.label)
+        return send(res, 200, { ok: true })
+      }
+      case '/api/pay': {
+        const b = bodies.pay.parse(raw)
+        return send(res, 200, await pay({ module: b.module, to: b.to, amountUsd: b.amountUsd, memo: b.memo || 'Manual payment' }))
+      }
+      case '/api/portfolio/targets': {
+        const b = bodies.targets.parse(raw)
+        return send(res, 200, setTargets(b.targets, b.driftThresholdPct))
+      }
+      case '/api/portfolio/rebalance':
+        return send(res, 200, await runRebalance())
+      case '/api/paper/reset': {
+        const p = resetPaper(bodies.paper.parse(raw).cashUsd)
+        bumpVersion()
+        return send(res, 200, p)
+      }
+      case '/api/approve':
+        return send(res, 200, await approveAny(bodies.id.parse(raw).id))
+      case '/api/wallet/prepare': {
+        const b = bodies.prepare.parse(raw)
+        return send(res, 200, await prepareSigned(b.id, b.account))
+      }
+      case '/api/wallet/complete': {
+        const b = bodies.complete.parse(raw)
+        return send(res, 200, await completeSigned(b.id, b.account, b.hashes))
+      }
+      case '/api/reject':
+        return send(res, 200, rejectAny(bodies.id.parse(raw).id))
+    }
+  }
+  send(res, 404, { error: 'Not found' })
+}
+
+export interface HandleOptions {
+  /** Serve web/ files (the local server does; on Vercel the platform serves them). */
+  serveFiles: boolean
+  /** Local only: refuse requests whose Host header is not one of these (DNS-rebinding guard). */
+  allowedHosts?: Set<string>
+}
+
+/** One request handler for both the local server and the Vercel function. */
+export async function handleRequest(req: IncomingMessage, res: ServerResponse, opts: HandleOptions): Promise<void> {
+  try {
+    if (opts.allowedHosts && !opts.allowedHosts.has(req.headers.host ?? '')) return send(res, 403, { error: 'Forbidden host' })
+    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+    const path = url.pathname
+    const method = req.method ?? 'GET'
+    const secure = hosted() || req.headers['x-forwarded-proto'] === 'https'
+
+    // Public endpoints
+    if (method === 'GET' && path === '/api/health') return send(res, 200, { ok: true })
+    if (method === 'GET' && path === '/api/session') return send(res, 200, { authRequired: authRequired(), authed: !authRequired() || isAuthed(req) })
+    if (method === 'POST' && path === '/api/login') return await login(req, res, secure)
+    if (method === 'POST' && path === '/api/logout') {
+      res.setHeader('set-cookie', clearedCookie(secure))
+      return send(res, 200, { ok: true })
+    }
+    if (path === '/api/cron') return await cron(req, res)
+
+    if (method === 'GET' && !path.startsWith('/api/') && opts.serveFiles && serveStatic(res, path)) return
+    if (!path.startsWith('/api/')) return send(res, 404, { error: 'Not found' })
+
+    // Everything else is behind the login. Hosted mode fails closed if the password is missing or weak.
+    const problem = authConfigProblem()
+    if (problem) return send(res, 503, { error: problem })
+    if (authRequired()) {
+      if (!isAuthed(req)) return send(res, 401, { error: 'Sign in required' })
+      if (method !== 'GET' && !sameOrigin(req)) return send(res, 403, { error: 'Cross-site request refused' })
+    }
+    return await withStore(() => route(req, res, method, path, url), { lock: method !== 'GET' })
+  } catch (err) {
+    if (res.headersSent) return void res.end()
+    const msg = err instanceof z.ZodError ? err.issues.map(i => i.message).join('; ') : (err as Error).message
+    send(res, 400, { error: msg })
+  }
+}
+
 export function startDashboard(port = Number(process.env.DASHBOARD_PORT) || 3000) {
   const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`])
-
-  const server = createServer(async (req, res) => {
-    try {
-      // Guards against DNS rebinding and cross-site requests: this UI can move money.
-      if (!allowedHosts.has(req.headers.host ?? '')) return send(res, 403, { error: 'Forbidden host' })
-      const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
-
-      if (req.method === 'GET' && url.pathname === '/api/state') return send(res, 200, await state())
-      if (req.method === 'GET' && url.pathname === '/api/wallet') return send(res, 200, await walletBalances(url.searchParams.get('account') ?? ''))
-      if (req.method === 'GET' && !url.pathname.startsWith('/api/') && serveStatic(res, url.pathname)) return
-
-      if (req.method === 'POST') {
-        if (!req.headers['content-type']?.startsWith('application/json')) return send(res, 415, { error: 'JSON only' })
-        const raw = await readJson(req)
-        switch (url.pathname) {
-          case '/api/dca': {
-            const b = bodies.dca.parse(raw)
-            return send(res, 200, createPlan(b.symbol, b.amountUsd, b.intervalHours))
-          }
-          case '/api/dca/run':
-            return send(res, 200, await runDue())
-          case '/api/dca/cancel':
-            return send(res, 200, { ok: cancelPlan(bodies.cancel.parse(raw).id) })
-          case '/api/payee': {
-            const b = bodies.payee.parse(raw)
-            addPayee(b.address, b.label)
-            return send(res, 200, { ok: true })
-          }
-          case '/api/pay': {
-            const b = bodies.pay.parse(raw)
-            return send(res, 200, await pay({ module: b.module, to: b.to, amountUsd: b.amountUsd, memo: b.memo || 'Manual payment' }))
-          }
-          case '/api/portfolio/targets': {
-            const b = bodies.targets.parse(raw)
-            return send(res, 200, setTargets(b.targets, b.driftThresholdPct))
-          }
-          case '/api/portfolio/rebalance':
-            return send(res, 200, await runRebalance())
-          case '/api/paper/reset': {
-            const p = resetPaper(bodies.paper.parse(raw).cashUsd)
-            bumpVersion()
-            return send(res, 200, p)
-          }
-          case '/api/approve':
-            return send(res, 200, await approveAny(bodies.id.parse(raw).id))
-          case '/api/wallet/prepare': {
-            const b = bodies.prepare.parse(raw)
-            return send(res, 200, await prepareSigned(b.id, b.account))
-          }
-          case '/api/wallet/complete': {
-            const b = bodies.complete.parse(raw)
-            return send(res, 200, await completeSigned(b.id, b.account, b.hashes))
-          }
-          case '/api/reject':
-            return send(res, 200, rejectAny(bodies.id.parse(raw).id))
-        }
-      }
-      send(res, 404, { error: 'Not found' })
-    } catch (err) {
-      const msg = err instanceof z.ZodError ? err.issues.map(i => i.message).join('; ') : (err as Error).message
-      send(res, 400, { error: msg })
-    }
-  })
+  const server = createServer((req, res) => void handleRequest(req, res, { serveFiles: true, allowedHosts }))
 
   server.listen(port, '127.0.0.1', () => {
     console.log(`Ledgerly dashboard: http://localhost:${port}`)
+    if (authRequired()) console.log('Login is on (DASHBOARD_PASSWORD is set).')
     if (liveBlockedReason) console.warn(`WARNING: ${liveBlockedReason}`)
     else if (!config.dryRun) console.warn(`LIVE MODE on ${config.network}: transactions will use real funds.`)
   })

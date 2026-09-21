@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { dataPath } from './store.js'
+import { dataPath, isRemote, readJson, writeJson } from './store.js'
 
 export interface LedgerEntry {
   ts: string
@@ -15,16 +15,24 @@ export interface LedgerEntry {
   reasoning: string
 }
 
+// Local files keep the existing one-entry-per-line format. Hosted mode keeps the latest entries as one JSON list.
 const DEFAULT_FILE = dataPath('ledger.jsonl')
+const REMOTE_KEY = dataPath('ledger.json')
+const REMOTE_MAX = 1000
 
 export function record(entry: Omit<LedgerEntry, 'ts'>, file: string = DEFAULT_FILE): LedgerEntry {
   const full: LedgerEntry = { ts: new Date().toISOString(), ...entry }
+  if (isRemote() && file === DEFAULT_FILE) {
+    writeJson(REMOTE_KEY, [...readJson<LedgerEntry[]>(REMOTE_KEY, []), full].slice(-REMOTE_MAX))
+    return full
+  }
   if (!existsSync(dirname(file))) mkdirSync(dirname(file), { recursive: true })
   appendFileSync(file, JSON.stringify(full) + '\n')
   return full
 }
 
 export function readAll(file: string = DEFAULT_FILE): LedgerEntry[] {
+  if (isRemote() && file === DEFAULT_FILE) return readJson<LedgerEntry[]>(REMOTE_KEY, [])
   if (!existsSync(file)) return []
   return readFileSync(file, 'utf8')
     .split('\n')

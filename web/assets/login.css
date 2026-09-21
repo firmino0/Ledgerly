@@ -1,0 +1,12 @@
+/* Sign-in page. Builds on tokens.css. */
+.login { width: min(400px, 100% - 2 * var(--gutter)); margin: clamp(48px, 14vh, 140px) auto; display: grid; gap: 14px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font: 500 22px/1 var(--serif); letter-spacing: -0.02em; color: var(--ink); margin-bottom: 18px; }
+.brand:hover { color: var(--ink); }
+.brand-mark { width: 24px; height: 24px; }
+.brand-mark rect { fill: var(--accent); }
+.brand-mark g { stroke: var(--accent-ink); fill: none; }
+.login h1 { font-size: clamp(32px, 6vw, 42px); letter-spacing: -0.025em; }
+.form-login { display: grid; gap: 16px; margin-top: 10px; padding-top: 22px; border-top: 1px solid var(--ink); }
+.error { color: var(--bad); font-size: 14px; margin: 0; }
+.foot { margin-top: 18px; font-size: 14px; }
+.foot a { color: var(--ink-2); }

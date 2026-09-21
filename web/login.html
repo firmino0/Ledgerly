@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in &middot; Ledgerly</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/assets/fonts/newsreader-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/login.css">
+<script src="/assets/theme.js"></script>
+</head>
+<body>
+<main class="login">
+  <a class="brand" href="/" aria-label="Ledgerly website">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="4"/><g stroke-width="2" stroke-linecap="square"><path d="M9 8v16"/><path d="M9 24h14"/><path d="M14 12h9"/><path d="M14 17h9"/></g></svg>
+    <span>Ledgerly</span>
+  </a>
+
+  <h1>Sign in</h1>
+  <p class="muted">This dashboard can approve payments and trades, so it sits behind a password.</p>
+
+  <form id="form" class="form-login" autocomplete="on">
+    <label class="field">
+      <span>Password</span>
+      <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+    </label>
+    <p id="error" class="error" role="alert" hidden></p>
+    <button class="btn btn-primary" type="submit" id="submit">Sign in</button>
+  </form>
+
+  <p class="foot"><a href="/">&larr; Back to the website</a></p>
+</main>
+<script src="/assets/login.js"></script>
+</body>
+</html>

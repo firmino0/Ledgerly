@@ -4,3 +4,4 @@ data/*
 .testdata
 *.tmp
 *.tmp.ts
+dist

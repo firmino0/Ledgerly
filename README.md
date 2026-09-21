@@ -63,6 +63,8 @@ Two parts, served by the same small Node server, with no framework and no build 
 
 Files live in `web/`. Design tokens are in `web/assets/tokens.css` (light and dark), and the fonts are served locally from `web/assets/fonts`.
 
+**Hosting on Vercel.** The website and the dashboard can both be hosted. Hosted mode adds a password login, keeps state in Upstash Redis instead of local files, and runs the DCA timer through a secured cron endpoint. See [DEPLOY.md](DEPLOY.md). Running it on your own computer is unchanged and needs no login.
+
 Design notes: the look is a printed ledger (warm paper, one green accent, a serif for headings, monospace tabular figures, thin rules instead of shadowed cards). All text is inserted as text nodes rather than HTML, and the server sends a strict Content-Security-Policy with no inline scripts or styles. Approving a held action while in live mode asks for a browser confirmation first.
 
 ## Quick start
@@ -93,6 +95,7 @@ Try this: set targets `NVDA 40, AAPL 30`, reset the paper portfolio to $100, pre
 | `npm run preflight` | Read-only mainnet readiness check (chain, contracts, quotes, wallet balances) |
 | `npm test` | Unit tests |
 | `npm run check` | Type check |
+| `npm run build:vercel` | Rebuild the bundle the Vercel function runs (needed after changing `src/`; `npm test` fails if it is stale) |
 
 ## Two ways to approve a held action
 
@@ -105,7 +108,7 @@ In live mode, each held payment or trade can be approved two ways:
 
 For "Sign with my wallet" the server re-checks your rules, builds the exact transactions (an exact-amount approval where needed, then the swap or transfer), and the dashboard asks your wallet to switch to Robinhood Chain and confirm each step. Afterwards the server waits for the transaction and checks that it came from your connected wallet, went to the prepared contract with exactly the prepared data, and succeeded. Only then is the action recorded. Anything that does not match is refused.
 
-**Tested two ways.** The flow was driven through the real buttons against a wallet stand-in, and the transaction data was decoded and checked. It has also run once for real: a $0.50 NVDA buy was signed with a connected wallet, and the server confirmed it on chain before recording it. Failure paths on a real chain, such as a swap that reverts, have not been run.
+**Tested two ways.** The flow was driven through the real buttons against a wallet stand-in, and the transaction data was decoded and checked. Both approval paths have also run for real: a $0.50 NVDA buy was signed with a connected wallet and confirmed on chain before it was recorded, and the agent wallet has sent a buy and a payment. Failure paths on a real chain, such as a swap that reverts, have not been run.
 
 ## Going live on mainnet (real money)
 
@@ -123,21 +126,21 @@ See `.env.example`. Main settings: `SERV_API_KEY`, `SERV_MODEL`, `NETWORK`, `DRY
 
 ## Status and honest limits
 
-**Tested:** guardrails, rebalancing math, swap route selection, wallet transaction data, DCA decision parsing and the MCP read-only filter (34 unit tests); live SERV Reasoning calls; live Robinhood price API; live onchain quotes on mainnet; the dashboard end to end in dry-run mode, including approvals and restart persistence; and the wallet-signing flow, both against a simulated wallet and once for real: a $0.50 NVDA buy signed with a connected wallet and confirmed on Robinhood Chain mainnet (transaction `0xf353df4d5b9a925ea02399237bc6badf7d5ac75e41088ea104a6083dc2b9dfe1`).
+**Tested:** guardrails, rebalancing math, swap route selection, wallet transaction data, DCA decision parsing and the MCP read-only filter (34 unit tests); live SERV Reasoning calls; live Robinhood price API; live onchain quotes on mainnet; the dashboard end to end in dry-run mode, including approvals and restart persistence; and three live mainnet transactions, all confirmed on Robinhood Chain: a $0.50 NVDA buy signed with a connected wallet (`0xf353df4d5b9a925ea02399237bc6badf7d5ac75e41088ea104a6083dc2b9dfe1`), a $0.50 NVDA DCA buy sent by the agent wallet (`0xfea991d5425612b143af50a78677f64c1381e960b3de2f36bda7f8f19ff93088`), and a $0.20 USDG payment (`0xb342bac44a45e0eadacf90f50184efccf6604d9a283499df0172b728877a953e`).
 
-**Not yet run with real funds:** the agent wallet sending on its own ("Let agent send"), live sells, and live payments. The code is written and the dry-run path exercises the same quoting, but only that one signed buy has run on mainnet. Treat the next live run as a test.
+**Not yet run with real funds:** live sells and live rebalancing. The code is written and the dry-run path exercises the same quoting, but only buys and one payment have run on mainnet. Treat the next live run of those as a test.
 
 **Robinhood MCP:** the connector is unverified with a real login. Robinhood's sign-in is an OAuth flow in a desktop browser, so a token has to be supplied as `ROBINHOOD_MCP_TOKEN`. It is off by default and read-only.
 
 **Simplifications:**
 - Holdings are valued at the mid price and ignore Robinhood's small share multiplier (about 0.1%).
 - Dry-run trades count toward the daily cap, so long demos may need a higher `MAX_PER_DAY`.
-- The dashboard is local only (localhost) and is not authenticated beyond that.
+- Locally the dashboard listens on localhost only and has no login. Hosted, it is protected by a single shared password (one user, not a multi-user system).
 
 ## Security notes
 
 - Never commit `.env`. It is already in `.gitignore`.
-- The dashboard binds to localhost, rejects unexpected Host headers and non-JSON requests, and renders log text safely.
+- Locally the dashboard binds to localhost, rejects unexpected Host headers and non-JSON requests, and renders log text safely. Hosted, it also requires a password, rate-limits sign-in, and refuses to serve the API if no strong password is set.
 - The decision log records model output, which can include user-typed memos. Do not put private information in payee names or memos, especially if your SERV workspace has data collection turned on.
 
 ## Tech

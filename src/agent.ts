@@ -9,6 +9,7 @@ import { approveAny } from './approve.js'
 import { listPending } from './approvals.js'
 import { getPortfolioConfig, portfolioView, runRebalance, setTargets } from './portfolio.js'
 import { callRobinhoodReadTool, listRobinhoodTools } from './robinhoodMcp.js'
+import { withStore } from './store.js'
 import { addPayee, listPayees, pay } from './treasury.js'
 
 const agent = new Agent({
@@ -186,7 +187,7 @@ startDashboard()
 
 // Check for due DCA plans every minute.
 setInterval(() => {
-  runDue().catch(err => console.error('DCA tick failed:', err))
+  withStore(() => runDue(), { lock: true }).catch(err => console.error('DCA tick failed:', err))
 }, 60_000)
 
 // A rejected platform key surfaces as an uncaught error from the tunnel's websocket handler. Keep the

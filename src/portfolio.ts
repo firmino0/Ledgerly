@@ -5,7 +5,7 @@ import { record } from './ledger.js'
 import { getQuote } from './market.js'
 import { getPaper } from './paper.js'
 import { explain } from './reasoning.js'
-import { dataPath, bumpVersion, getVersion, readJson, writeJson } from './store.js'
+import { bumpVersion, dataPath, getVersion, isRemote, readJson, writeJson } from './store.js'
 import { ADDR, balanceOf } from './swap.js'
 import { requestTrade, type TradeResult } from './trading.js'
 
@@ -134,7 +134,8 @@ export async function portfolioView() {
   const cfg = getPortfolioConfig()
   const symbols = Object.keys(cfg.targets)
   if (!symbols.length) return { cfg, source: config.dryRun ? 'paper' : 'onchain', plan: null as Plan | null }
-  if (viewCache && viewCache.version === getVersion() && Date.now() - viewCache.at < 20_000) return viewCache.value as { cfg: PortfolioConfig; source: string; plan: Plan }
+  // The short cache is per process, so it is skipped when hosted (another instance may have changed the balances).
+  if (!isRemote() && viewCache && viewCache.version === getVersion() && Date.now() - viewCache.at < 20_000) return viewCache.value as { cfg: PortfolioConfig; source: string; plan: Plan }
   const snap = await snapshot(symbols)
   const value = { cfg, source: snap.source, plan: planRebalance(snap.holdingsUsd, snap.cashUsd, cfg) }
   viewCache = { at: Date.now(), version: getVersion(), value }

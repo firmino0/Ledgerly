@@ -6,7 +6,7 @@ import { evaluate } from './guardrails.js'
 import { type LedgerEntry, readAll, record, spentToday } from './ledger.js'
 import { getQuote } from './market.js'
 import { ADDR, balanceOf, minOut, quoteBuy, quoteSell, routerAbi } from './swap.js'
-import { bumpVersion } from './store.js'
+import { bumpVersion, dataPath, readJson, writeJson } from './store.js'
 
 /**
  * "Sign with my wallet": the human's browser wallet signs and sends a held action, so no server-side key is used.
@@ -31,7 +31,10 @@ interface Prepared {
 
 export const CHAIN_ID = 4663
 const PREPARE_TTL_MS = 10 * 60_000
-const prepared = new Map<string, Prepared>()
+// Kept in saved state, not memory: on a serverless host the prepare and complete calls can reach different instances.
+const PREPARED_FILE = dataPath('prepared.json')
+const loadPrepared = () => readJson<Record<string, Prepared>>(PREPARED_FILE, {})
+const savePrepared = (all: Record<string, Prepared>) => writeJson(PREPARED_FILE, all)
 
 // ---------- pure transaction builders (unit-tested) ----------
 export const approveStep = (token: Address, spender: Address, amount: bigint, label: string): TxStep => ({
@@ -71,9 +74,9 @@ export async function walletBalances(account: string) {
   return { usdg: formatUnits(usdg, 6), eth: formatEther(eth) }
 }
 
-function dropExpired() {
+function pruned(all: Record<string, Prepared>): Record<string, Prepared> {
   const now = Date.now()
-  for (const [id, p] of prepared) if (p.expiresAt < now) prepared.delete(id)
+  return Object.fromEntries(Object.entries(all).filter(([, p]) => p.expiresAt >= now))
 }
 
 // ---------- prepare ----------
@@ -127,18 +130,23 @@ export async function prepareSigned(id: string, accountInput: unknown) {
   const account = parseAccount(accountInput)
   const p = getPending(id)
   if (!p) throw new Error('That action no longer exists or has expired.')
-  dropExpired()
 
   const built = p.kind === 'trade' ? await prepareTrade(p.trade, account) : await preparePayment(p.req, account)
   const entry =
     p.kind === 'trade'
       ? { module: p.trade.module, action: built.action, amountUsd: p.trade.amountUsd, why: p.trade.why }
       : { module: p.req.module, action: built.action, amountUsd: p.req.amountUsd, to: p.req.to, why: 'Held for approval, then signed by the owner.' }
-  prepared.set(id, { account, steps: built.steps, expiresAt: Date.now() + PREPARE_TTL_MS, entry })
+  savePrepared({ ...pruned(loadPrepared()), [id]: { account, steps: built.steps, expiresAt: Date.now() + PREPARE_TTL_MS, entry } })
   return { steps: built.steps, summary: built.summary, chainId: CHAIN_ID }
 }
 
 // ---------- complete ----------
+function forget(id: string) {
+  const all = loadPrepared()
+  delete all[id]
+  savePrepared(all)
+}
+
 const isHash = (h: unknown): h is Hex => typeof h === 'string' && /^0x[0-9a-fA-F]{64}$/.test(h)
 
 export interface CompleteResult {
@@ -153,7 +161,7 @@ export interface CompleteResult {
  */
 export async function completeSigned(id: string, accountInput: unknown, hashes: unknown): Promise<CompleteResult> {
   const account = parseAccount(accountInput)
-  const prep = prepared.get(id)
+  const prep = loadPrepared()[id]
   if (!prep || prep.expiresAt < Date.now()) throw new Error('This signing session expired. Press the button again to prepare it.')
   if (prep.account !== account) throw new Error('A different wallet was prepared for this action.')
   if (!Array.isArray(hashes) || !hashes.length || hashes.length > 3 || !hashes.every(isHash)) throw new Error('Expected 1 to 3 transaction hashes.')
@@ -176,14 +184,14 @@ export async function completeSigned(id: string, accountInput: unknown, hashes: 
   if (receipt.status !== 'success') {
     const { why: _why, ...base } = prep.entry
     record({ ...base, verdict: 'needs_approval', executed: false, dryRun: false, txHash: mainHash, reasoning: `Signed by ${short(account)} but the transaction reverted on chain.` })
-    prepared.delete(id)
+    forget(id)
     throw new Error('The transaction reverted on chain. Nothing was bought or paid; only gas was used.')
   }
 
   takePending(id)
   const { why, ...entry } = prep.entry
   record({ ...entry, verdict: 'needs_approval', executed: true, dryRun: false, txHash: mainHash, reasoning: `${why} Signed with the owner's wallet ${short(account)}.` })
-  prepared.delete(id)
+  forget(id)
   bumpVersion()
   return { status: 'executed', message: `Confirmed on chain. ${prep.entry.action}`, txHash: mainHash }
 }
