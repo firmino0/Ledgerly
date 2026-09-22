@@ -9,6 +9,7 @@ import { approveAny } from './approve.js'
 import { listPending } from './approvals.js'
 import { getPortfolioConfig, portfolioView, runRebalance, runRebalanceIfDue, setTargets } from './portfolio.js'
 import { researchAsset } from './research.js'
+import { listRegistry } from './registry.js'
 import { callRobinhoodReadTool, listRobinhoodTools } from './robinhoodMcp.js'
 import { withStore } from './store.js'
 import { addPayee, listPayees, pay } from './treasury.js'
@@ -125,6 +126,15 @@ agent.addCapability({
   inputSchema: z.object({ planId: z.string() }),
   async run({ args }) {
     return cancelPlan(args.planId) ? `Cancelled ${args.planId}.` : `No plan with id ${args.planId}.`
+  }
+})
+
+agent.addCapability({
+  name: 'list_tokenized_assets',
+  description: 'List every tokenized stock and ETF Robinhood has actually deployed on Robinhood Chain mainnet, from Robinhood\'s own public asset registry. Use this to see what is available before researching or setting up a DCA plan for a symbol you are not sure about.',
+  inputSchema: z.object({}),
+  async run() {
+    return JSON.stringify(await listRegistry(), null, 2)
   }
 })
 

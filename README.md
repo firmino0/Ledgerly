@@ -20,7 +20,7 @@ Giving an AI agent a wallet is risky. Ledgerly is built around one rule: **the m
 
 | Module | What it does |
 |---|---|
-| **Research** | Look up a tokenized stock before you commit to it: its live quote, whether a live Uniswap v3 pool against USDG actually exists on Robinhood Chain, and a short SERV Reasoning summary. Read-only, no caps or approvals involved. |
+| **Research** | Browse every tokenized stock and ETF Robinhood has live on Robinhood Chain, straight from Robinhood's own public asset registry (no "coming soon" list exists publicly). Pick one to see its live quote, whether a Uniswap v3 pool against USDG actually exists onchain, and a short SERV Reasoning summary. Read-only, no caps or approvals involved. |
 | **DCA** | Recurring buys of Robinhood stock tokens (for example NVDA). SERV Reasoning decides each time whether to buy, skip, or scale the amount between 0.5x and 1.5x, using live prices and the day's price range. |
 | **Portfolio rebalancing** | You set target weights such as `NVDA 40, AAPL 30`; the rest stays in USDG. It sells overweight assets and buys underweight ones when they drift past a threshold. The trade sizing is deterministic; SERV writes the explanation. |
 | **Payroll and Bills** | Pay freelancers per milestone and pay bills in USDG, only to allowlisted payees. |
