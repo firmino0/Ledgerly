@@ -58,7 +58,7 @@
 main { padding: 34px clamp(20px, 4vw, 52px) 96px; min-width: 0; max-width: 1180px; outline: none; }
 .view-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
 .view-head h1 { font-size: clamp(30px, 3.6vw, 40px); letter-spacing: -0.025em; }
-.view-head p { color: var(--ink-3); margin-top: 8px; max-width: 60ch; }
+.view-head p { color: var(--ink-2); margin-top: 8px; max-width: 60ch; }
 
 /* sections are cards: elevated off the page, not divided by a printed rule */
 .sec {
@@ -97,7 +97,7 @@ main { padding: 34px clamp(20px, 4vw, 52px) 96px; min-width: 0; max-width: 1180p
 .queue .amt { font: 600 16px/1 var(--mono); font-variant-numeric: tabular-nums; }
 .queue .acts { display: flex; gap: 6px; }
 
-.empty { padding: 8px 0; color: var(--ink-3); max-width: 60ch; }
+.empty { padding: 8px 0; color: var(--ink-2); max-width: 60ch; }
 .empty strong { color: var(--ink-2); font-weight: 600; }
 
 /* decision feed (overview) */
@@ -107,7 +107,7 @@ main { padding: 34px clamp(20px, 4vw, 52px) 96px; min-width: 0; max-width: 1180p
 .feed li:first-child { padding-top: 0; }
 .feed .t { color: var(--ink-3); font-size: 12.5px; padding-top: 2px; white-space: nowrap; }
 .feed .what strong { font-weight: 600; }
-.feed .why { color: var(--ink-3); font-size: 13.5px; margin-top: 3px; max-width: 64ch; overflow-wrap: anywhere; }
+.feed .why { color: var(--ink-2); font-size: 14px; line-height: 1.5; margin-top: 4px; max-width: 64ch; overflow-wrap: anywhere; }
 .feed .side-r { text-align: right; display: grid; gap: 6px; justify-items: end; }
 
 /* spec list (rules in force) */
@@ -138,7 +138,7 @@ main { padding: 34px clamp(20px, 4vw, 52px) 96px; min-width: 0; max-width: 1180p
 .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 
 .table-wrap { overflow-x: auto; border-top: 0; }
-td .sub { display: block; color: var(--ink-3); font-size: 13px; margin-top: 3px; max-width: 62ch; overflow-wrap: anywhere; }
+td .sub { display: block; color: var(--ink-2); font-size: 13.5px; line-height: 1.5; margin-top: 4px; max-width: 62ch; overflow-wrap: anywhere; }
 td.addr { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
 .filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
 .filters .field { min-width: 150px; }
@@ -195,7 +195,7 @@ details.more .full { white-space: pre-line; }
 .form-error { color: var(--bad); margin: 14px 0 0; }
 
 /* the rule that decided a ledger entry, kept visually apart from the model's own commentary below it */
-.rule-tag { display: inline-block; margin: 5px 0; padding: 3px 9px; border-radius: var(--radius-sm); background: var(--sunken); border: 1px solid var(--rule); font: 500 11.5px/1.4 var(--mono); color: var(--ink-2); }
+.rule-tag { display: inline-block; margin: 6px 0; padding: 4px 10px; border-radius: var(--radius-sm); background: var(--sunken); border: 1px solid var(--rule); font: 500 12px/1.5 var(--mono); color: var(--ink-2); }
 
 /* research: a directory of live tokenized assets, plus a detail lookup. Uses the site's normal components. */
 .asset-list tr { cursor: pointer; }
