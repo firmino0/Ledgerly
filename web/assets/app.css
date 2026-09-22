@@ -183,6 +183,57 @@ details.more .full { white-space: pre-line; }
 .sec > p.muted { margin-top: 14px; }
 .form-error { color: var(--bad); margin: 14px 0 0; }
 
+/* research terminal: a dark, monospace panel embedded in the page, styled after a market data terminal */
+.term {
+  --term-bg: #07090a; --term-panel: #0c0f0e; --term-line: #1c2521; --term-line-2: #131b17;
+  --term-fg: #d7f2df; --term-dim: #7fa290; --term-up: #57d38a; --term-warn: #e0b34d; --term-down: #f0716a;
+  background: var(--term-bg); color: var(--term-fg); font-family: var(--mono);
+  border: 1px solid var(--term-line); border-radius: 8px; overflow: hidden;
+  box-shadow: 0 24px 64px -32px rgba(0, 0, 0, .55);
+}
+.term-bar { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; background: var(--term-panel); border-bottom: 1px solid var(--term-line); }
+.term-dot { width: 9px; height: 9px; border-radius: 50%; }
+.term-dot.r { background: var(--term-down); } .term-dot.y { background: var(--term-warn); } .term-dot.g { background: var(--term-up); }
+.term-bar-title { margin-left: 6px; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--term-dim); }
+.term-body { padding: 20px; }
+
+.term-prompt { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--term-panel); border: 1px solid var(--term-line); border-radius: 6px; }
+.term-prompt .car { color: var(--term-up); font-weight: 600; }
+.term-prompt input { flex: 1; background: transparent; border: 0; height: auto; padding: 0; color: var(--term-fg); font: 15px/1.3 var(--mono); caret-color: var(--term-up); }
+.term-prompt input::placeholder { color: var(--term-dim); }
+.term-prompt input:focus-visible { outline: none; }
+.term-prompt .btn { border-color: var(--term-line); color: var(--term-fg); font-family: var(--mono); }
+.term-prompt .btn:hover { background: var(--term-line-2); border-color: var(--term-dim); }
+.term-hint { margin: 10px 2px 0; font-size: 11.5px; letter-spacing: .03em; color: var(--term-dim); }
+
+.term-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--term-line); border: 1px solid var(--term-line); border-radius: 6px; overflow: hidden; margin-top: 18px; }
+.term-stat { background: var(--term-panel); padding: 14px 16px; display: grid; gap: 6px; min-width: 0; }
+.term-stat .k { font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--term-dim); }
+.term-stat .v { font: 500 clamp(16px, 2vw, 22px)/1.25 var(--mono); letter-spacing: -0.01em; overflow-wrap: break-word; }
+.term-stat .v.up { color: var(--term-up); } .term-stat .v.warn { color: var(--term-warn); } .term-stat .v.down { color: var(--term-down); }
+
+.term-note { margin-top: 14px; padding: 12px 14px; border: 1px dashed var(--term-line); border-radius: 6px; color: var(--term-dim); font-size: 13px; line-height: 1.5; }
+.term-note b { color: var(--term-fg); font-weight: 500; }
+.term-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+
+.term-watch { margin-top: 22px; }
+.term-watch .term-hd { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.term-watch .term-hd h3 { font: 500 11.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--term-dim); margin: 0; }
+.term-watch .term-hd button { background: none; border: 0; color: var(--term-dim); font: 11px var(--mono); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; padding: 0; }
+.term table { font-family: var(--mono); font-size: 13px; }
+.term th { color: var(--term-dim); border-bottom: 1px solid var(--term-line); font-size: 10.5px; }
+.term td { border-bottom: 1px solid var(--term-line-2); color: var(--term-fg); cursor: pointer; }
+.term tr:hover td { background: var(--term-line-2); }
+.term .mark-allow { color: var(--term-up); } .term .mark-hold { color: var(--term-warn); } .term .mark-deny { color: var(--term-down); }
+.term .muted { color: var(--term-dim); }
+
+.term-status { display: flex; flex-wrap: wrap; gap: 18px; padding: 10px 16px; background: var(--term-panel); border-top: 1px solid var(--term-line); font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--term-dim); }
+.term-status b { color: var(--term-up); font-weight: 500; }
+
+@media (max-width: 640px) {
+  .term-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 /* wallet controls in the banner */
 .banner-right { display: flex; align-items: center; gap: 8px; flex: none; }
 .banner .btn-quiet { padding: 0 8px; }

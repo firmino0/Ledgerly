@@ -364,50 +364,129 @@ function overview() {
 }
 
 /** Look up a tokenized stock: its live quote, whether Ledgerly can trade it onchain right now, and SERV's summary. */
+/** A market-data terminal: search a ticker, see its quote and SERV's summary, and keep a running watchlist. */
 function research() {
-  const symbolInput = h('input', { name: 'symbol', placeholder: 'NVDA', required: true, maxlength: 10, autocomplete: 'off', spellcheck: 'false' })
+  const WATCH_KEY = 'ledgerly-watchlist'
+  let watch = []
+  try {
+    watch = JSON.parse(localStorage.getItem(WATCH_KEY) || '[]')
+  } catch {}
+  const saveWatch = () => {
+    try {
+      localStorage.setItem(WATCH_KEY, JSON.stringify(watch.slice(0, 20)))
+    } catch {}
+  }
+
+  const input = h('input', { placeholder: 'NVDA', maxlength: 10, autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Symbol' })
   const prefill = (routeParams.get('symbol') || '').toUpperCase()
-  if (prefill) symbolInput.value = prefill
-  const lookupForm = h('form', { class: 'form wide-first' }, field('Symbol', symbolInput), h('div', { class: 'actions' }, h('button', { class: 'btn btn-primary', type: 'submit' }, 'Look up')))
-  const resultBox = h('div')
-  const fig = (label, value, note) => h('div', { class: 'fig' }, h('span', { class: 'eyebrow' }, label), h('div', { class: 'v' }, value), h('div', { class: 'note' }, note))
+  if (prefill) input.value = prefill
+  const promptForm = h('form', { class: 'term-prompt' }, h('span', { class: 'car' }, '\u203a'), input, h('button', { class: 'btn btn-sm', type: 'submit' }, 'Enter'))
+
+  const statsBox = h('div')
+  const noteBox = h('div')
+  const actionsBox = h('div')
+  const watchBox = h('div')
+  const statusBox = h('div', { class: 'term-status' })
+
+  const stat = (k, v, cls) => h('div', { class: 'term-stat' }, h('div', { class: 'k' }, k), h('div', { class: 'v' + (cls ? ' ' + cls : '') }, v))
+  const statusMark = w => {
+    const [label, cls] = w.halted ? ['Halted', 'mark-hold'] : w.tradable ? ['Onchain', 'mark-allow'] : ['No pool', 'mark-deny']
+    return h('span', { class: 'mark ' + cls }, label)
+  }
+
+  function paintStatus(lastSym) {
+    // replaceChildren stringifies a bare null instead of dropping it, so filter before passing the list through.
+    statusBox.replaceChildren(
+      ...[
+        h('span', {}, 'Network ', h('b', {}, 'Robinhood Chain 4663')),
+        h('span', {}, 'Tracking ', h('b', {}, String(watch.length))),
+        lastSym ? h('span', {}, 'Last ', h('b', {}, lastSym)) : null,
+        h('span', {}, h('b', {}, new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })))
+      ].filter(Boolean)
+    )
+  }
+
+  function paintWatch() {
+    if (!watch.length) return watchBox.replaceChildren(empty('Nothing tracked yet.', 'Look up a symbol above and it stays here for the session.'))
+    watchBox.replaceChildren(
+      h('div', { class: 'term-hd' }, h('h3', {}, 'Watchlist'), h('button', { type: 'button', onclick: () => { watch = []; saveWatch(); paintWatch(); paintStatus() } }, 'Clear')),
+      h('div', { class: 'table-wrap' },
+        h('table', {},
+          h('thead', {}, h('tr', {}, h('th', {}, 'Symbol'), h('th', { class: 'r' }, 'Mid'), h('th', {}, 'Day range'), h('th', {}, 'Status'))),
+          h('tbody', {}, watch.map(w => {
+            const row = h('tr', {}, h('td', {}, w.symbol), h('td', { class: 'r num' }, usd(w.mid)), h('td', { class: 'muted num' }, `${usd(w.dailyLow)}\u2013${usd(w.dailyHigh)}`), h('td', {}, statusMark(w)))
+            row.addEventListener('click', () => lookup(w.symbol))
+            return row
+          }))
+        )
+      )
+    )
+  }
 
   async function lookup(sym) {
-    resultBox.replaceChildren(h('p', { class: 'muted' }, `Looking up ${sym}\u2026`))
+    input.value = sym
+    statsBox.replaceChildren(h('p', { class: 'muted' }, `Looking up ${sym}\u2026`))
+    noteBox.replaceChildren()
+    actionsBox.replaceChildren()
     try {
       const r = await api('/api/research?symbol=' + encodeURIComponent(sym))
       const q = r.quote
-      resultBox.replaceChildren(
-        h('section', { class: 'sec' },
-          secHead(r.symbol, q.halted ? 'Trading halted right now' : r.tradable ? 'Tradable on Robinhood Chain mainnet' : 'No live pool on Robinhood Chain yet'),
-          h('div', { class: 'figures' },
-            fig('Mid price', usd(q.mid), `bid ${usd(q.bid)} \u00b7 ask ${usd(q.ask)}`),
-            fig('Day range', `${usd(q.dailyLow)}\u2013${usd(q.dailyHigh)}`, q.halted ? 'Halted' : 'Live')
-          ),
-          h('p', { class: 'muted' }, r.note),
-          r.tradable
-            ? h('div', { class: 'actions' },
-                h('a', { class: 'btn', href: '#/dca?symbol=' + encodeURIComponent(r.symbol) }, 'Start a DCA plan'),
-                h('a', { class: 'btn', href: '#/portfolio?symbol=' + encodeURIComponent(r.symbol) }, 'Add to portfolio targets'))
-            : null
+      const tone = q.halted ? 'warn' : r.tradable ? 'up' : 'down'
+      statsBox.replaceChildren(
+        h('div', { class: 'term-stats' },
+          stat('Symbol', r.symbol),
+          stat('Mid', usd(q.mid), tone),
+          stat('Day range', `${usd(q.dailyLow)}\u2013${usd(q.dailyHigh)}`),
+          stat('Status', q.halted ? 'Halted' : r.tradable ? 'Onchain' : 'No pool', tone)
         )
       )
+      noteBox.replaceChildren(h('div', { class: 'term-note' }, h('b', {}, 'SERV \u00b7 '), r.note))
+      // actionsBox was already cleared above; only replace it when there is something tradable to show.
+      if (r.tradable) {
+        actionsBox.replaceChildren(
+          h('div', { class: 'term-actions' },
+            h('a', { class: 'btn', href: '#/dca?symbol=' + encodeURIComponent(r.symbol) }, 'Start a DCA plan'),
+            h('a', { class: 'btn', href: '#/portfolio?symbol=' + encodeURIComponent(r.symbol) }, 'Add to portfolio targets'))
+        )
+      }
+      watch = [{ symbol: r.symbol, mid: q.mid, dailyLow: q.dailyLow, dailyHigh: q.dailyHigh, halted: q.halted, tradable: r.tradable }, ...watch.filter(w => w.symbol !== r.symbol)].slice(0, 20)
+      saveWatch()
+      paintWatch()
+      paintStatus(r.symbol)
     } catch (e) {
-      resultBox.replaceChildren(h('p', { class: 'form-error' }, e.message))
+      statsBox.replaceChildren(h('p', { class: 'form-error' }, e.message))
+      paintStatus()
     }
   }
 
-  lookupForm.addEventListener('submit', e => {
+  promptForm.addEventListener('submit', e => {
     e.preventDefault()
-    const sym = symbolInput.value.trim().toUpperCase()
+    const sym = input.value.trim().toUpperCase()
     if (sym) lookup(sym)
   })
 
+  paintWatch()
+  paintStatus()
   if (prefill) lookup(prefill)
-  else resultBox.replaceChildren(empty('Look up a symbol above.', 'SERV Reasoning summarizes where its price sits, and checks whether Ledgerly can actually trade it onchain right now. Nothing here is financial advice.'))
+  else statsBox.replaceChildren(empty('Look up a symbol above.', 'SERV Reasoning summarizes where its price sits, and checks whether Ledgerly can actually trade it onchain right now. Nothing here is financial advice.'))
+
+  const term = h(
+    'div',
+    { class: 'term' },
+    h('div', { class: 'term-bar' }, h('span', { class: 'term-dot r' }), h('span', { class: 'term-dot y' }), h('span', { class: 'term-dot g' }), h('span', { class: 'term-bar-title' }, 'ledgerly \u2014 research terminal')),
+    h('div', { class: 'term-body' },
+      promptForm,
+      h('p', { class: 'term-hint' }, 'Type a ticker (e.g. NVDA) and press Enter. Read-only, not financial advice.'),
+      statsBox,
+      noteBox,
+      actionsBox,
+      h('div', { class: 'term-watch' }, watchBox)
+    ),
+    statusBox
+  )
 
   return {
-    root: h('div', {}, viewHead('Research', 'Look up a tokenized stock before you DCA or rebalance into it.'), h('section', { class: 'sec' }, secHead('Look up an asset'), lookupForm), resultBox),
+    root: h('div', {}, viewHead('Terminal', 'Research tokenized stocks before you DCA or rebalance into them.'), term),
     update() {}
   }
 }
@@ -631,7 +710,7 @@ async function refresh() {
 }
 
 const ROUTES = { overview, research, portfolio, dca, payments, ledger }
-const TITLES = { overview: 'Overview', research: 'Research', portfolio: 'Portfolio', dca: 'DCA', payments: 'Payments', ledger: 'Ledger' }
+const TITLES = { overview: 'Overview', research: 'Terminal', portfolio: 'Portfolio', dca: 'DCA', payments: 'Payments', ledger: 'Ledger' }
 let firstRoute = true
 
 let wanted = 'overview'
