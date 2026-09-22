@@ -181,6 +181,7 @@ details.more[open] > summary { display: none; }
 details.more .full { white-space: pre-line; }
 
 .sec > p.muted { margin-top: 14px; }
+.form-error { color: var(--bad); margin: 14px 0 0; }
 
 /* wallet controls in the banner */
 .banner-right { display: flex; align-items: center; gap: 8px; flex: none; }

@@ -363,11 +363,64 @@ function overview() {
   }
 }
 
+/** Look up a tokenized stock: its live quote, whether Ledgerly can trade it onchain right now, and SERV's summary. */
+function research() {
+  const symbolInput = h('input', { name: 'symbol', placeholder: 'NVDA', required: true, maxlength: 10, autocomplete: 'off', spellcheck: 'false' })
+  const prefill = (routeParams.get('symbol') || '').toUpperCase()
+  if (prefill) symbolInput.value = prefill
+  const lookupForm = h('form', { class: 'form wide-first' }, field('Symbol', symbolInput), h('div', { class: 'actions' }, h('button', { class: 'btn btn-primary', type: 'submit' }, 'Look up')))
+  const resultBox = h('div')
+  const fig = (label, value, note) => h('div', { class: 'fig' }, h('span', { class: 'eyebrow' }, label), h('div', { class: 'v' }, value), h('div', { class: 'note' }, note))
+
+  async function lookup(sym) {
+    resultBox.replaceChildren(h('p', { class: 'muted' }, `Looking up ${sym}\u2026`))
+    try {
+      const r = await api('/api/research?symbol=' + encodeURIComponent(sym))
+      const q = r.quote
+      resultBox.replaceChildren(
+        h('section', { class: 'sec' },
+          secHead(r.symbol, q.halted ? 'Trading halted right now' : r.tradable ? 'Tradable on Robinhood Chain mainnet' : 'No live pool on Robinhood Chain yet'),
+          h('div', { class: 'figures' },
+            fig('Mid price', usd(q.mid), `bid ${usd(q.bid)} \u00b7 ask ${usd(q.ask)}`),
+            fig('Day range', `${usd(q.dailyLow)}\u2013${usd(q.dailyHigh)}`, q.halted ? 'Halted' : 'Live')
+          ),
+          h('p', { class: 'muted' }, r.note),
+          r.tradable
+            ? h('div', { class: 'actions' },
+                h('a', { class: 'btn', href: '#/dca?symbol=' + encodeURIComponent(r.symbol) }, 'Start a DCA plan'),
+                h('a', { class: 'btn', href: '#/portfolio?symbol=' + encodeURIComponent(r.symbol) }, 'Add to portfolio targets'))
+            : null
+        )
+      )
+    } catch (e) {
+      resultBox.replaceChildren(h('p', { class: 'form-error' }, e.message))
+    }
+  }
+
+  lookupForm.addEventListener('submit', e => {
+    e.preventDefault()
+    const sym = symbolInput.value.trim().toUpperCase()
+    if (sym) lookup(sym)
+  })
+
+  if (prefill) lookup(prefill)
+  else resultBox.replaceChildren(empty('Look up a symbol above.', 'SERV Reasoning summarizes where its price sits, and checks whether Ledgerly can actually trade it onchain right now. Nothing here is financial advice.'))
+
+  return {
+    root: h('div', {}, viewHead('Research', 'Look up a tokenized stock before you DCA or rebalance into it.'), h('section', { class: 'sec' }, secHead('Look up an asset'), lookupForm), resultBox),
+    update() {}
+  }
+}
+
 function portfolio() {
   const summary = h('div')
   const targetsInput = h('input', { name: 'targets', placeholder: 'NVDA 40, AAPL 30', required: true, autocomplete: 'off', spellcheck: 'false' })
   const driftInput = h('input', { name: 'drift', class: 'num', inputmode: 'decimal', placeholder: '5' })
   let dirty = false
+  if (routeParams.get('symbol')) {
+    targetsInput.value = routeParams.get('symbol').toUpperCase() + ' '
+    dirty = true // keep the prefill: skip the auto-sync from loaded targets below until the form is submitted or reset
+  }
   targetsInput.addEventListener('input', () => (dirty = true))
 
   const targetsForm = h('form', { class: 'form wide-first' }, field('Assets and percent, comma separated', targetsInput), field('Drift threshold (points)', driftInput), h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, 'Save targets')))
@@ -443,9 +496,11 @@ function portfolio() {
 
 function dca() {
   const plansBox = h('div')
+  const symbolInput = h('input', { name: 'symbol', placeholder: 'NVDA', required: true, maxlength: 10, autocomplete: 'off', spellcheck: 'false' })
+  if (routeParams.get('symbol')) symbolInput.value = routeParams.get('symbol').toUpperCase()
   const addForm = h('form', { class: 'form' },
     h('p', { class: 'form-title' }, 'New plan'),
-    field('Asset', h('input', { name: 'symbol', placeholder: 'NVDA', required: true, maxlength: 10, autocomplete: 'off', spellcheck: 'false' })),
+    field('Asset', symbolInput),
     field('USD per buy', h('input', { name: 'amountUsd', class: 'num', inputmode: 'decimal', placeholder: '10', required: true })),
     field('Every (hours)', h('input', { name: 'intervalHours', class: 'num', inputmode: 'numeric', placeholder: '24', required: true })),
     h('div', { class: 'actions' }, h('button', { class: 'btn btn-primary', type: 'submit' }, 'Add plan'))
@@ -575,11 +630,13 @@ async function refresh() {
   }
 }
 
-const ROUTES = { overview, portfolio, dca, payments, ledger }
-const TITLES = { overview: 'Overview', portfolio: 'Portfolio', dca: 'DCA', payments: 'Payments', ledger: 'Ledger' }
+const ROUTES = { overview, research, portfolio, dca, payments, ledger }
+const TITLES = { overview: 'Overview', research: 'Research', portfolio: 'Portfolio', dca: 'DCA', payments: 'Payments', ledger: 'Ledger' }
 let firstRoute = true
 
 let wanted = 'overview'
+/** Query params from the current hash, e.g. #/dca?symbol=NVDA. Read once at view construction time. */
+let routeParams = new URLSearchParams()
 
 function mount() {
   current = ROUTES[wanted]()
@@ -588,7 +645,11 @@ function mount() {
 }
 
 function route() {
-  wanted = ROUTES[location.hash.replace('#/', '')] ? location.hash.replace('#/', '') : 'overview'
+  const hash = location.hash.replace('#/', '')
+  const qi = hash.indexOf('?')
+  const name = qi === -1 ? hash : hash.slice(0, qi)
+  routeParams = new URLSearchParams(qi === -1 ? '' : hash.slice(qi + 1))
+  wanted = ROUTES[name] ? name : 'overview'
   document.title = `${TITLES[wanted]} · Ledgerly`
   document.querySelectorAll('#nav a').forEach(a => (a.dataset.view === wanted ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')))
   current = null

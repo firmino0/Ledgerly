@@ -32,6 +32,7 @@ export const USER_LIMITS = {
 export const USER_ALLOWED = new Set([
   'GET /api/state',
   'GET /api/wallet',
+  'GET /api/research',
   'POST /api/dca',
   'POST /api/dca/run',
   'POST /api/dca/cancel',

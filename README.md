@@ -20,6 +20,7 @@ Giving an AI agent a wallet is risky. Ledgerly is built around one rule: **the m
 
 | Module | What it does |
 |---|---|
+| **Research** | Look up a tokenized stock before you commit to it: its live quote, whether a live Uniswap v3 pool against USDG actually exists on Robinhood Chain, and a short SERV Reasoning summary. Read-only, no caps or approvals involved. |
 | **DCA** | Recurring buys of Robinhood stock tokens (for example NVDA). SERV Reasoning decides each time whether to buy, skip, or scale the amount between 0.5x and 1.5x, using live prices and the day's price range. |
 | **Portfolio rebalancing** | You set target weights such as `NVDA 40, AAPL 30`; the rest stays in USDG. It sells overweight assets and buys underweight ones when they drift past a threshold. The trade sizing is deterministic; SERV writes the explanation. |
 | **Payroll and Bills** | Pay freelancers per milestone and pay bills in USDG, only to allowlisted payees. |
@@ -59,7 +60,7 @@ Two parts, served by the same small Node server, with no framework and no build 
 | Path | What it is |
 |---|---|
 | `/` | The website: what Ledgerly is, how a decision is made, the rules, and what runs onchain. It is fully static and can be hosted on its own. |
-| `/app` | The dashboard: Overview, Portfolio, DCA, Payments and Ledger, with an always-visible banner that says whether trading is on. |
+| `/app` | The dashboard: Overview, Research, Portfolio, DCA, Payments and Ledger, with an always-visible banner that says whether trading is on. |
 
 Files live in `web/`. Design tokens are in `web/assets/tokens.css` (light and dark), and the fonts are served locally from `web/assets/fonts`.
 

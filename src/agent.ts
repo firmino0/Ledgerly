@@ -8,6 +8,7 @@ import { readAll } from './ledger.js'
 import { approveAny } from './approve.js'
 import { listPending } from './approvals.js'
 import { getPortfolioConfig, portfolioView, runRebalance, runRebalanceIfDue, setTargets } from './portfolio.js'
+import { researchAsset } from './research.js'
 import { callRobinhoodReadTool, listRobinhoodTools } from './robinhoodMcp.js'
 import { withStore } from './store.js'
 import { addPayee, listPayees, pay } from './treasury.js'
@@ -124,6 +125,15 @@ agent.addCapability({
   inputSchema: z.object({ planId: z.string() }),
   async run({ args }) {
     return cancelPlan(args.planId) ? `Cancelled ${args.planId}.` : `No plan with id ${args.planId}.`
+  }
+})
+
+agent.addCapability({
+  name: 'research_asset',
+  description: 'Look up a tokenized stock: its live quote, whether Ledgerly can actually trade it onchain right now, and a short SERV Reasoning summary of where the price sits. Read-only, not financial advice. Use this before setting up a DCA plan or portfolio target for a symbol you have not tried before.',
+  inputSchema: z.object({ symbol: z.string().describe('Ticker, e.g. NVDA') }),
+  async run({ args }) {
+    return JSON.stringify(await researchAsset(args.symbol), null, 2)
   }
 })
 

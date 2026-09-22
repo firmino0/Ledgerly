@@ -14,7 +14,8 @@ import { policy } from './mode.js'
 import { cancelPlan, createPlan, listPlans, runDue } from './dca.js'
 import { readAll, spentToday } from './ledger.js'
 import { portfolioView, runRebalance, runRebalanceIfDue, setTargets } from './portfolio.js'
-import { backendName, dataPath, isUser, readJson as readSaved, withinRateLimit, withStore, writeJson } from './store.js'
+import { researchAsset } from './research.js'
+import { backendName, currentTenant, dataPath, isUser, readJson as readSaved, withinRateLimit, withStore, writeJson } from './store.js'
 import { addPayee, listPayees, pay } from './treasury.js'
 import { completeSigned, prepareSigned, signingAvailable, walletBalances } from './walletSign.js'
 
@@ -161,9 +162,18 @@ async function cron(req: IncomingMessage, res: ServerResponse) {
   })
 }
 
+const RESEARCH_MAX_PER_DAY = Number(process.env.RESEARCH_MAX_PER_DAY) || 100
+
 async function route(req: IncomingMessage, res: ServerResponse, method: string, path: string, url: URL) {
   if (method === 'GET' && path === '/api/state') return send(res, 200, await state())
   if (method === 'GET' && path === '/api/wallet') return send(res, 200, await walletBalances(url.searchParams.get('account') ?? ''))
+  if (method === 'GET' && path === '/api/research') {
+    const symbol = (url.searchParams.get('symbol') ?? '').trim()
+    if (!symbol) return send(res, 400, { error: 'Symbol is required.' })
+    const key = 'research:' + (currentTenant()?.id ?? 'owner')
+    if (!(await withinRateLimit(key, RESEARCH_MAX_PER_DAY, 86400))) return send(res, 429, { error: 'Research lookups are limited per day. Try again tomorrow.' })
+    return send(res, 200, await researchAsset(symbol))
+  }
 
   if (method === 'POST') {
     if (!req.headers['content-type']?.startsWith('application/json')) return send(res, 415, { error: 'JSON only' })
