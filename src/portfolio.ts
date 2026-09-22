@@ -154,7 +154,14 @@ export async function runRebalance(): Promise<RebalanceResult> {
 
   if (!plan.trades.length) {
     const msg = `Portfolio is within ${cfg.driftThresholdPct} points of target. No trades needed.`
-    record({ module: 'rebalance', action: 'Rebalance check', verdict: 'allow', executed: false, reasoning: msg })
+    record({
+      module: 'rebalance',
+      action: 'Rebalance check',
+      verdict: 'allow',
+      executed: false,
+      rule: `Within the ${cfg.driftThresholdPct}-point drift threshold.`,
+      reasoning: 'No trades needed.'
+    })
     return { message: msg, plan, results: [] }
   }
 

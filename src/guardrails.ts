@@ -47,3 +47,11 @@ export function evaluate(
   }
   return { decision: 'allow' }
 }
+
+/**
+ * A short, structured label for which rule decided this verdict — the auditable half of the ledger, kept apart
+ * from any model commentary. `allow` has no `reason` field on the type, so this fills one in for it.
+ */
+export function ruleFor(v: Verdict): string {
+  return v.decision === 'allow' ? 'Within the per-transaction cap, the daily cap and the approval threshold.' : v.reason
+}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { evaluate } from '../src/guardrails.js'
+import { evaluate, ruleFor } from '../src/guardrails.js'
 
 const policy = { maxPerTx: 50, maxPerDay: 100, approvalThreshold: 25 }
 const ok = '0xabc0000000000000000000000000000000000001'
@@ -26,4 +26,12 @@ test('denies zero, negative and NaN amounts', () => {
 })
 test('allowlist match is case-insensitive on the caller side', () => {
   assert.equal(evaluate(policy, { amountUsd: 5, to: ok.toUpperCase().replace('0X', '0x') }, 0, allow).decision, 'allow')
+})
+
+test('ruleFor gives an explicit label even for allow, and passes deny/needs_approval reasons through unchanged', () => {
+  assert.match(ruleFor(evaluate(policy, { amountUsd: 5, to: ok }, 0, allow)), /within/i)
+  const denied = evaluate(policy, { amountUsd: 60, to: ok }, 0, allow)
+  assert.equal(ruleFor(denied), denied.decision === 'deny' ? denied.reason : undefined)
+  const held = evaluate(policy, { amountUsd: 30, to: ok }, 0, allow)
+  assert.equal(ruleFor(held), held.decision === 'needs_approval' ? held.reason : undefined)
 })

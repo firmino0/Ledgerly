@@ -13,6 +13,12 @@ export interface LedgerEntry {
   /** Only on old entries from when simulation existed. Nothing writes it any more, and it never counts as spend. */
   dryRun?: boolean
   txHash?: string
+  /**
+   * The deterministic rule that produced the verdict (a cap, the allowlist, a drift threshold), when one applied.
+   * Kept separate from `reasoning` on purpose: this is the auditable fact a human or regulator can point to;
+   * `reasoning` is the model's own commentary and is never what decided anything.
+   */
+  rule?: string
   reasoning: string
 }
 

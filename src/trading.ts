@@ -4,7 +4,7 @@ import { config, tradingOffReason } from './config.js'
 import { allowLiveSells } from './accounts.js'
 import { policy } from './mode.js'
 import { isUser } from './store.js'
-import { evaluate } from './guardrails.js'
+import { evaluate, ruleFor } from './guardrails.js'
 import { readAll, record, spentToday } from './ledger.js'
 import { getQuote, type Quote } from './market.js'
 import { balanceOf, buyToken, quoteBuy, quoteSell, sellToken } from './swap.js'
@@ -20,10 +20,10 @@ export interface TradeResult {
   txHash?: string
 }
 
-const log = (t: TradeRequest, verdict: 'allow' | 'needs_approval' | 'deny', action: string, executed: boolean, reasoning: string, txHash?: string) =>
-  record({ module: t.module, action, amountUsd: t.amountUsd, verdict, executed, txHash, reasoning })
+const log = (t: TradeRequest, verdict: 'allow' | 'needs_approval' | 'deny', action: string, executed: boolean, reasoning: string, txHash?: string, rule?: string) =>
+  record({ module: t.module, action, amountUsd: t.amountUsd, verdict, executed, txHash, reasoning, rule })
 
-async function execute(t: TradeRequest, q: Quote): Promise<TradeResult> {
+async function execute(t: TradeRequest, q: Quote, rule: string): Promise<TradeResult> {
   if (isUser()) throw new Error('Accounts sign their own transactions, so nothing is sent from the server. Use "Sign with my wallet".')
   const label = `${t.side === 'buy' ? 'Buy' : 'Sell'} ${t.symbol}`
   const contract = q.contract as `0x${string}`
@@ -32,7 +32,7 @@ async function execute(t: TradeRequest, q: Quote): Promise<TradeResult> {
     const route = await quoteBuy(contract, t.amountUsd, q.ask)
     const detail = `~${route.tokens.toFixed(6)} tokens via ${route.fee / 10_000}% pool @ $${route.impliedPriceUsd.toFixed(2)} (ask ${q.ask})`
     const { swapTx } = await buyToken(contract, t.amountUsd, route)
-    log(t, 'allow', `${label}: ${detail}`, true, t.why, swapTx)
+    log(t, 'allow', `${label}: ${detail}`, true, t.why, swapTx, rule)
     return { status: 'executed', amountUsd: t.amountUsd, tokens: route.tokens, txHash: swapTx, message: `Bought $${t.amountUsd} of ${t.symbol}, ${detail}. tx ${swapTx}` }
   }
 
@@ -50,7 +50,7 @@ async function execute(t: TradeRequest, q: Quote): Promise<TradeResult> {
   const route = await quoteSell(contract, amountIn, q.bid)
   const detail = `~${tokens.toFixed(6)} tokens for ~$${route.usdOut.toFixed(2)} via ${route.fee / 10_000}% pool @ $${route.impliedPriceUsd.toFixed(2)} (bid ${q.bid})`
   const { swapTx } = await sellToken(contract, amountIn, route)
-  log(t, 'allow', `${label}: ${detail}`, true, t.why, swapTx)
+  log(t, 'allow', `${label}: ${detail}`, true, t.why, swapTx, rule)
   return { status: 'executed', amountUsd: usdEstimate, tokens, txHash: swapTx, message: `Sold ${detail}. tx ${swapTx}` }
 }
 
@@ -80,15 +80,15 @@ export async function requestTrade(t: TradeRequest, opts: { approved?: boolean }
     const verdict = evaluate(rules, { amountUsd: t.amountUsd }, spentToday(readAll()), new Set())
 
     if (verdict.decision === 'deny') {
-      log(t, 'deny', label, false, `${verdict.reason} ${t.why}`)
+      log(t, 'deny', label, false, t.why, undefined, ruleFor(verdict))
       return { status: 'denied', amountUsd: t.amountUsd, message: `Denied: ${verdict.reason}` }
     }
     if (verdict.decision === 'needs_approval') {
       const p = addPending({ kind: 'trade', trade: t })
-      log(t, 'needs_approval', label, false, `${verdict.reason} ${t.why}`)
+      log(t, 'needs_approval', label, false, t.why, undefined, ruleFor(verdict))
       return { status: 'pending_approval', approvalId: p.id, amountUsd: t.amountUsd, message: `Held for approval (${verdict.reason}) id ${p.id}` }
     }
-    const result = await execute(t, q)
+    const result = await execute(t, q, ruleFor(verdict))
     bumpVersion()
     return result
   } catch (err) {

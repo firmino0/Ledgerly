@@ -302,7 +302,7 @@ function feedList(entries) {
         'li',
         {},
         h('span', { class: 't num' }, clock(e.ts)),
-        h('div', { class: 'what' }, h('strong', {}, e.action), reason(e.reasoning, 'why')),
+        h('div', { class: 'what' }, h('strong', {}, e.action), e.rule ? h('div', { class: 'rule-tag' }, e.rule) : null, reason(e.reasoning, 'why')),
         h('div', { class: 'side-r' }, e.amountUsd != null ? h('span', { class: 'num' }, usd(e.amountUsd)) : null, mark(e))
       )
     )
@@ -702,7 +702,7 @@ function ledger() {
           h('thead', {}, h('tr', {}, h('th', {}, 'Time'), h('th', {}, 'Action'), h('th', { class: 'r' }, 'Amount'), h('th', {}, 'Result'))),
           h('tbody', {}, rows.map(e => h('tr', {},
             h('td', { class: 'num muted' }, dayTime(e.ts)),
-            h('td', {}, h('strong', {}, `${MODULES[e.module] || e.module} · ${e.action}`), reason(e.reasoning, 'sub'), e.txHash ? h('span', { class: 'sub' }, 'Transaction ', h('a', { href: S.explorer + e.txHash, target: '_blank', rel: 'noopener noreferrer' }, short(e.txHash))) : null),
+            h('td', {}, h('strong', {}, `${MODULES[e.module] || e.module} · ${e.action}`), e.rule ? h('div', { class: 'rule-tag' }, e.rule) : null, reason(e.reasoning, 'sub'), e.txHash ? h('span', { class: 'sub' }, 'Transaction ', h('a', { href: S.explorer + e.txHash, target: '_blank', rel: 'noopener noreferrer' }, short(e.txHash))) : null),
             h('td', { class: 'r num' }, e.amountUsd != null ? usd(e.amountUsd) : ''),
             h('td', {}, mark(e))
           )))

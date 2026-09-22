@@ -109,13 +109,13 @@ async function decide(plan: DcaPlan, q: Quote): Promise<DcaDecision> {
 // ---------- execution ----------
 export async function runPlan(plan: DcaPlan, now = new Date()): Promise<DcaRunResult> {
   const base = { planId: plan.id, symbol: plan.symbol }
-  const skip = (reasoning: string) =>
-    record({ module: 'dca', action: `Skip ${plan.symbol}`, verdict: 'allow', executed: false, reasoning })
+  const skip = (reasoning: string, rule?: string) =>
+    record({ module: 'dca', action: `Skip ${plan.symbol}`, verdict: 'allow', executed: false, reasoning, rule })
 
   try {
     const q = await getQuote(plan.symbol)
     if (q.halted) {
-      skip('Trading is halted for this asset.')
+      skip('Trading is halted for this asset.', 'Robinhood market status: halted.')
       return { ...base, outcome: 'skipped', message: 'Skipped: trading halted.' }
     }
 

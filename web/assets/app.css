@@ -194,6 +194,9 @@ details.more .full { white-space: pre-line; }
 .sec > p.muted { margin-top: 14px; }
 .form-error { color: var(--bad); margin: 14px 0 0; }
 
+/* the rule that decided a ledger entry, kept visually apart from the model's own commentary below it */
+.rule-tag { display: inline-block; margin: 5px 0; padding: 3px 9px; border-radius: var(--radius-sm); background: var(--sunken); border: 1px solid var(--rule); font: 500 11.5px/1.4 var(--mono); color: var(--ink-2); }
+
 /* research: a directory of live tokenized assets, plus a detail lookup. Uses the site's normal components. */
 .asset-list tr { cursor: pointer; }
 .asset-list tr:hover td { background: var(--sunken); }
