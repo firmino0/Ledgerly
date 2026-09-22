@@ -7,7 +7,7 @@ import { cancelPlan, createPlan, listPlans, runDue } from './dca.js'
 import { readAll } from './ledger.js'
 import { approveAny } from './approve.js'
 import { listPending } from './approvals.js'
-import { getPortfolioConfig, portfolioView, runRebalance, setTargets } from './portfolio.js'
+import { getPortfolioConfig, portfolioView, runRebalance, runRebalanceIfDue, setTargets } from './portfolio.js'
 import { callRobinhoodReadTool, listRobinhoodTools } from './robinhoodMcp.js'
 import { withStore } from './store.js'
 import { addPayee, listPayees, pay } from './treasury.js'
@@ -185,9 +185,16 @@ agent.addCapability({
 
 startDashboard()
 
-// Check for due DCA plans every minute.
+// Check for due DCA plans every minute, and drift-check the portfolio at the same time (throttled internally).
 setInterval(() => {
-  withStore(() => runDue(), { lock: true }).catch(err => console.error('DCA tick failed:', err))
+  withStore(async () => {
+    await runDue()
+    try {
+      await runRebalanceIfDue()
+    } catch (err) {
+      console.error('Rebalance check failed:', err)
+    }
+  }, { lock: true }).catch(err => console.error('DCA tick failed:', err))
 }, 60_000)
 
 // A rejected platform key surfaces as an uncaught error from the tunnel's websocket handler. Keep the

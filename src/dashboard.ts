@@ -13,7 +13,7 @@ import { config, tradingOffReason } from './config.js'
 import { policy } from './mode.js'
 import { cancelPlan, createPlan, listPlans, runDue } from './dca.js'
 import { readAll, spentToday } from './ledger.js'
-import { portfolioView, runRebalance, setTargets } from './portfolio.js'
+import { portfolioView, runRebalance, runRebalanceIfDue, setTargets } from './portfolio.js'
 import { backendName, dataPath, isUser, readJson as readSaved, withinRateLimit, withStore, writeJson } from './store.js'
 import { addPayee, listPayees, pay } from './treasury.js'
 import { completeSigned, prepareSigned, signingAvailable, walletBalances } from './walletSign.js'
@@ -138,11 +138,27 @@ async function login(req: IncomingMessage, res: ServerResponse, secure: boolean)
   send(res, 200, { ok: true })
 }
 
-/** Scheduled trigger (Vercel Cron, or any pinger) that runs due DCA plans. Needs `Authorization: Bearer CRON_SECRET`. */
+/**
+ * Scheduled trigger (Vercel Cron, or any pinger) that runs due DCA plans and checks the portfolio for drift.
+ * Needs `Authorization: Bearer CRON_SECRET`.
+ */
 async function cron(req: IncomingMessage, res: ServerResponse) {
   if (!cronAuthorized(req)) return send(res, 401, { error: 'Unauthorized' })
-  const results = await withStore(() => runDue(), { lock: true })
-  send(res, 200, { ran: results.length, results: results.map(r => ({ symbol: r.symbol, outcome: r.outcome })) })
+  const { dca, rebalance } = await withStore(async () => {
+    const dca = await runDue()
+    let rebalance: Awaited<ReturnType<typeof runRebalanceIfDue>> = null
+    try {
+      rebalance = await runRebalanceIfDue()
+    } catch (err) {
+      rebalance = { message: `Rebalance check failed: ${(err as Error).message}`, results: [] }
+    }
+    return { dca, rebalance }
+  }, { lock: true })
+  send(res, 200, {
+    ran: dca.length,
+    results: dca.map(r => ({ symbol: r.symbol, outcome: r.outcome })),
+    rebalance: rebalance ? { message: rebalance.message, trades: rebalance.results.length } : null
+  })
 }
 
 async function route(req: IncomingMessage, res: ServerResponse, method: string, path: string, url: URL) {

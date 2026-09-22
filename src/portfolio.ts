@@ -169,3 +169,20 @@ export async function runRebalance(): Promise<RebalanceResult> {
   clearPortfolioCache()
   return { message: `Rebalance: ${tradeText}.`, plan, results }
 }
+
+let lastAutoRebalanceCheck = 0
+
+/**
+ * Same as `runRebalance`, but only actually checks when `REBALANCE_CHECK_HOURS` (default 24) has passed since the
+ * last check. Lets the scheduler poll this cheaply and often without hammering the chain on every tick. Returns
+ * null when there is nothing to do: no targets set, or the interval has not elapsed. Manual "Rebalance now" calls
+ * `runRebalance` directly and ignores this gate.
+ */
+export async function runRebalanceIfDue(): Promise<RebalanceResult | null> {
+  const cfg = getPortfolioConfig()
+  if (!Object.keys(cfg.targets).length) return null
+  const hours = Number(process.env.REBALANCE_CHECK_HOURS) || 24
+  if (Date.now() - lastAutoRebalanceCheck < hours * 3_600_000) return null
+  lastAutoRebalanceCheck = Date.now()
+  return runRebalance()
+}

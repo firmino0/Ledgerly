@@ -62,15 +62,17 @@ Click **Deploy** (or **Redeploy** after changing variables, since variables only
 - The banner should say **Live · Robinhood Chain mainnet**. If it says "Trading is off", it tells you which setting is missing. Add a tiny DCA plan, press **Run due plans now**, and look at the Ledger.
 - Sign out, and confirm `/app` sends you back to the login.
 
-## The scheduled job (DCA timer)
+## The scheduled job (DCA timer and rebalance check)
 
-`vercel.json` runs `/api/cron` once a day. That is the most the free **Hobby** plan allows, and Vercel may run it any time within that hour. DCA plans are measured in hours, so daily is fine to start.
+`vercel.json` runs `/api/cron` once a day. That is the most the free **Hobby** plan allows, and Vercel may run it any time within that hour. Each run does two things: it executes any DCA plan that is due, and it checks the portfolio for drift (skipped if you haven't set targets, or if `AGENT_PRIVATE_KEY` isn't set, since checking needs to read the wallet). DCA plans are measured in hours, so daily is fine to start; the drift check runs at most once every `REBALANCE_CHECK_HOURS` (default 24), so calling `/api/cron` more often than that doesn't rebalance more often.
 
-For finer timing you have two options:
+For finer DCA timing you have two options:
 - **Vercel Pro:** change `"schedule": "0 9 * * *"` in `vercel.json` to `"* * * * *"` (every minute). On Hobby that setting fails the deployment.
 - **A free external pinger** (for example cron-job.org): call `https://<your-app>.vercel.app/api/cron` every 5 minutes with the header `Authorization: Bearer <your CRON_SECRET>`.
 
-Running it twice is safe: a plan that just ran is not due again.
+Running it twice is safe: a plan that just ran is not due again, and a drift check inside its own interval is a no-op.
+
+Self-hosted (`npm run dashboard` or `npm start`), both checks run every minute on their own with no cron needed; the rebalance check still only actually triggers once every `REBALANCE_CHECK_HOURS`.
 
 ## Going live on mainnet (real money)
 
