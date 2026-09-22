@@ -20,7 +20,7 @@ Giving an AI agent a wallet is risky. Ledgerly is built around one rule: **the m
 
 | Module | What it does |
 |---|---|
-| **Research** | Browse every tokenized stock and ETF Robinhood has live on Robinhood Chain, straight from Robinhood's own public asset registry (no "coming soon" list exists publicly). Pick one to see its live quote, whether a Uniswap v3 pool against USDG actually exists onchain, and a short SERV Reasoning summary. Read-only, no caps or approvals involved. |
+| **Terminal** | Browse every tokenized stock and ETF Robinhood has live on Robinhood Chain, straight from Robinhood's own public asset registry (no "coming soon" list exists publicly). Pick one to see its live quote, whether a Uniswap v3 pool against USDG actually exists onchain, and a short SERV Reasoning summary. Read-only, no caps or approvals involved. |
 | **DCA** | Recurring buys of Robinhood stock tokens (for example NVDA). SERV Reasoning decides each time whether to buy, skip, or scale the amount between 0.5x and 1.5x, using live prices and the day's price range. |
 | **Portfolio rebalancing** | You set target weights such as `NVDA 40, AAPL 30`; the rest stays in USDG. It sells overweight assets and buys underweight ones when they drift past a threshold. The trade sizing is deterministic; SERV writes the explanation. |
 | **Payroll and Bills** | Pay freelancers per milestone and pay bills in USDG, only to allowlisted payees. |
@@ -60,7 +60,7 @@ Two parts, served by the same small Node server, with no framework and no build 
 | Path | What it is |
 |---|---|
 | `/` | The website: what Ledgerly is, how a decision is made, the rules, and what runs onchain. It is fully static and can be hosted on its own. |
-| `/app` | The dashboard: Overview, Research, Portfolio, DCA, Payments and Ledger, with an always-visible banner that says whether trading is on. |
+| `/app` | The dashboard: Overview, Terminal, Portfolio, DCA, Payments and Ledger, with an always-visible banner that says whether trading is on. |
 
 Files live in `web/`. Design tokens are in `web/assets/tokens.css` (light and dark), and the fonts are served locally from `web/assets/fonts`.
 
@@ -68,7 +68,7 @@ Files live in `web/`. Design tokens are in `web/assets/tokens.css` (light and da
 
 Other people can use it through real **accounts** (`/account`, off unless you enable it), where each person signs every transaction with their own wallet. Accounts have no server-side key, so the owner's wallet can never be reached from them.
 
-Design notes: the look is a printed ledger (warm paper, one green accent, a serif for headings, monospace tabular figures, thin rules instead of shadowed cards). All text is inserted as text nodes rather than HTML, and the server sends a strict Content-Security-Policy with no inline scripts or styles. Approving a held action while in live mode asks for a browser confirmation first.
+Design notes: a modern fintech dashboard look (neutral slate surfaces, one green accent, cards with real shadows instead of ledger-style rules, monospace for numbers). All text is inserted as text nodes rather than HTML, and the server sends a strict Content-Security-Policy with no inline scripts or styles. Approving a held action while in live mode asks for a browser confirmation first.
 
 ## Quick start
 

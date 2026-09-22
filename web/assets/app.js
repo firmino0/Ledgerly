@@ -528,7 +528,7 @@ function research() {
 
   return {
     root: h('div', {},
-      viewHead('Research', "Every tokenized stock and ETF Robinhood has live on its chain, straight from Robinhood's own asset registry. Pick one, or search, to see its quote and SERV's summary, then DCA or add it to your portfolio right here."),
+      viewHead('Terminal', "Every tokenized stock and ETF Robinhood has live on its chain, straight from Robinhood's own asset registry. Pick one, or search, to see its quote and SERV's summary, then DCA or add it to your portfolio right here."),
       statCards,
       h('section', { class: 'sec' }, secHead('Look up an asset'), searchForm, detailBox),
       h('section', { class: 'sec' }, secHead('Live assets'), countLine, listBox)
@@ -756,7 +756,7 @@ async function refresh() {
 }
 
 const ROUTES = { overview, research, portfolio, dca, payments, ledger }
-const TITLES = { overview: 'Overview', research: 'Research', portfolio: 'Portfolio', dca: 'DCA', payments: 'Payments', ledger: 'Ledger' }
+const TITLES = { overview: 'Overview', research: 'Terminal', portfolio: 'Portfolio', dca: 'DCA', payments: 'Payments', ledger: 'Ledger' }
 let firstRoute = true
 
 let wanted = 'overview'
