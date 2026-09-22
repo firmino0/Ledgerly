@@ -32,7 +32,9 @@ export const USER_LIMITS = {
 export const USER_ALLOWED = new Set([
   'GET /api/state',
   'GET /api/wallet',
+  'GET /api/portfolio/config',
   'GET /api/registry',
+  'GET /api/quotes',
   'GET /api/research',
   'POST /api/dca',
   'POST /api/dca/run',

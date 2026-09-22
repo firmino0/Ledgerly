@@ -12,8 +12,9 @@ import { tokenBalance, walletAddress } from './chain.js'
 import { config, tradingOffReason } from './config.js'
 import { policy } from './mode.js'
 import { cancelPlan, createPlan, listPlans, runDue } from './dca.js'
+import { getQuote } from './market.js'
 import { readAll, spentToday } from './ledger.js'
-import { portfolioView, runRebalance, runRebalanceIfDue, setTargets } from './portfolio.js'
+import { getPortfolioConfig, portfolioView, runRebalance, runRebalanceIfDue, setTargets } from './portfolio.js'
 import { researchAsset } from './research.js'
 import { listRegistry } from './registry.js'
 import { backendName, currentTenant, dataPath, isUser, readJson as readSaved, withinRateLimit, withStore, writeJson } from './store.js'
@@ -164,11 +165,33 @@ async function cron(req: IncomingMessage, res: ServerResponse) {
 }
 
 const RESEARCH_MAX_PER_DAY = Number(process.env.RESEARCH_MAX_PER_DAY) || 100
+const QUOTES_MAX_PER_DAY = Number(process.env.QUOTES_MAX_PER_DAY) || 2000
 
 async function route(req: IncomingMessage, res: ServerResponse, method: string, path: string, url: URL) {
   if (method === 'GET' && path === '/api/state') return send(res, 200, await state())
   if (method === 'GET' && path === '/api/wallet') return send(res, 200, await walletBalances(url.searchParams.get('account') ?? ''))
+  // A cheap read of just the saved targets, with none of the onchain balance reads /api/state's portfolio view does.
+  if (method === 'GET' && path === '/api/portfolio/config') return send(res, 200, getPortfolioConfig())
   if (method === 'GET' && path === '/api/registry') return send(res, 200, { assets: await listRegistry() })
+  if (method === 'GET' && path === '/api/quotes') {
+    // Cheap and read-only (no SERV call, no onchain pool check), so a table full of rows can afford to call this.
+    // Still capped and rate-limited so a big filter change cannot fan out into an unbounded burst of price calls.
+    const symbols = [...new Set((url.searchParams.get('symbols') ?? '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean))].slice(0, 40)
+    if (!symbols.length) return send(res, 400, { error: 'symbols is required.' })
+    const key = 'quotes:' + (currentTenant()?.id ?? 'owner')
+    if (!(await withinRateLimit(key, QUOTES_MAX_PER_DAY, 86400))) return send(res, 429, { error: 'Quote lookups are limited per day. Try again tomorrow.' })
+    const quotes = await Promise.all(
+      symbols.map(async symbol => {
+        try {
+          const q = await getQuote(symbol)
+          return { symbol: q.symbol, ok: true as const, bid: q.bid, ask: q.ask, mid: q.mid, dailyLow: q.dailyLow, dailyHigh: q.dailyHigh, halted: q.halted }
+        } catch (err) {
+          return { symbol, ok: false as const, error: (err as Error).message }
+        }
+      })
+    )
+    return send(res, 200, { quotes })
+  }
   if (method === 'GET' && path === '/api/research') {
     const symbol = (url.searchParams.get('symbol') ?? '').trim()
     if (!symbol) return send(res, 400, { error: 'Symbol is required.' })

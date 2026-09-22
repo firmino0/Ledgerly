@@ -366,38 +366,87 @@ function overview() {
 /** Look up a tokenized stock: its live quote, whether Ledgerly can trade it onchain right now, and SERV's summary. */
 /** A market-data terminal: search a ticker, see its quote and SERV's summary, and keep a running watchlist. */
 /** Browse every tokenized stock live on Robinhood Chain, and look one up: its quote, whether it is actually tradable onchain, and SERV's summary. */
+/** Browse every tokenized stock live on Robinhood Chain, look one up, and act on it (DCA or portfolio target) without leaving the page. */
 function research() {
+  const fig = (label, value, note) => {
+    const v = h('div', { class: 'v' }, value)
+    return { v, el: h('div', { class: 'fig' }, h('span', { class: 'eyebrow' }, label), v, h('div', { class: 'note' }, note)) }
+  }
+  const netFig = fig('Network', 'Robinhood Chain', 'mainnet \u00b7 chain 4663')
+  const assetsFig = fig('Live assets', '\u2026', 'tokenized on Robinhood Chain')
+  const loadedFig = fig('Prices loaded', '\u2026', 'live quotes shown below')
+  const statCards = h('div', { class: 'figures figures-3' }, netFig.el, assetsFig.el, loadedFig.el)
+
   const filterInput = h('input', { placeholder: 'Filter by symbol or name, or type a ticker and press Enter\u2026', autocomplete: 'off', spellcheck: 'false' })
   const searchForm = h('form', { class: 'form wide-first' }, field('Live tokenized assets', filterInput), h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, 'Look up')))
   const countLine = h('p', { class: 'muted' }, 'Loading the list of tokenized assets\u2026')
   const listBox = h('div')
   const detailBox = h('div')
-  const fig = (label, value, note) => h('div', { class: 'fig' }, h('span', { class: 'eyebrow' }, label), h('div', { class: 'v' }, value), h('div', { class: 'note' }, note))
+
   let assets = []
+  const PAGE_SIZE = 30
+  let visibleCount = PAGE_SIZE
+  const quotesById = new Map() // symbol -> quote | 'error'
+  const pending = new Set()
 
   function renderList() {
     const q = filterInput.value.trim().toLowerCase()
     const filtered = q ? assets.filter(a => a.symbol.toLowerCase().includes(q) || a.name.toLowerCase().includes(q)) : assets
     countLine.textContent = assets.length ? `${filtered.length} of ${assets.length} tokenized assets live on Robinhood Chain mainnet` : ''
     if (!filtered.length) return listBox.replaceChildren(empty('No matches.', 'Try a different symbol or name.'))
+
+    const visible = filtered.slice(0, visibleCount)
+    const rows = visible.map(a => {
+      const qt = quotesById.get(a.symbol)
+      const known = qt && qt !== 'error'
+      const price = known ? usd(qt.mid) : qt === 'error' ? '\u2014' : '\u2026'
+      const range = known ? `${usd(qt.dailyLow)}\u2013${usd(qt.dailyHigh)}` : ''
+      const status = known ? h('span', { class: 'mark ' + (qt.halted ? 'mark-hold' : 'mark-allow') }, qt.halted ? 'Halted' : 'Trading') : ''
+      const row = h('tr', {}, h('td', { class: 'num' }, a.symbol), h('td', { class: 'muted' }, a.name), h('td', { class: 'r num' }, price), h('td', { class: 'muted num' }, range), h('td', {}, status))
+      row.addEventListener('click', () => lookup(a.symbol))
+      return row
+    })
+    const more = filtered.length - visible.length
+    const moreBtn = more > 0
+      ? h('button', { class: 'btn btn-sm', type: 'button', onclick: () => { visibleCount += PAGE_SIZE; renderList() } }, `Show ${Math.min(more, PAGE_SIZE)} more`)
+      : null
     listBox.replaceChildren(
       h('div', { class: 'table-wrap' },
         h('table', { class: 'asset-list' },
-          h('thead', {}, h('tr', {}, h('th', {}, 'Symbol'), h('th', {}, 'Name'))),
-          h('tbody', {}, filtered.map(a => {
-            const row = h('tr', {}, h('td', { class: 'num' }, a.symbol), h('td', { class: 'muted' }, a.name))
-            row.addEventListener('click', () => lookup(a.symbol))
-            return row
-          }))
+          h('thead', {}, h('tr', {}, h('th', {}, 'Symbol'), h('th', {}, 'Name'), h('th', { class: 'r' }, 'Price'), h('th', {}, 'Day range'), h('th', {}, 'Status'))),
+          h('tbody', {}, rows)
         )
-      )
+      ),
+      ...(moreBtn ? [h('div', { class: 'actions', style: 'margin-top:14px' }, moreBtn)] : [])
     )
+
+    const missing = visible.map(a => a.symbol).filter(sym => !quotesById.has(sym) && !pending.has(sym))
+    if (missing.length) loadQuotes(missing)
   }
-  filterInput.addEventListener('input', renderList)
+  filterInput.addEventListener('input', () => {
+    visibleCount = PAGE_SIZE
+    renderList()
+  })
+
+  async function loadQuotes(symbols) {
+    symbols.forEach(sym => pending.add(sym))
+    try {
+      const { quotes } = await api('/api/quotes?symbols=' + symbols.map(encodeURIComponent).join(','))
+      for (const qt of quotes) quotesById.set(qt.symbol, qt.ok ? qt : 'error')
+    } catch {
+      symbols.forEach(sym => quotesById.set(sym, 'error'))
+    } finally {
+      symbols.forEach(sym => pending.delete(sym))
+    }
+    loadedFig.v.textContent = `${quotesById.size} of ${assets.length}`
+    renderList()
+  }
 
   async function loadDirectory() {
     try {
       assets = (await api('/api/registry')).assets
+      assetsFig.v.textContent = String(assets.length)
+      loadedFig.v.textContent = `0 of ${assets.length}`
       renderList()
     } catch (e) {
       countLine.textContent = ''
@@ -411,19 +460,50 @@ function research() {
     try {
       const r = await api('/api/research?symbol=' + encodeURIComponent(sym))
       const q = r.quote
+
+      let quickActions = null
+      if (r.tradable) {
+        const dcaForm = h('form', { class: 'form' },
+          h('p', { class: 'form-title' }, 'Start a DCA plan'),
+          field('USD per buy', h('input', { name: 'amountUsd', class: 'num', inputmode: 'decimal', placeholder: '10', required: true })),
+          field('Every (hours)', h('input', { name: 'intervalHours', class: 'num', inputmode: 'numeric', placeholder: '24', required: true })),
+          h('div', { class: 'actions' }, h('button', { class: 'btn btn-primary btn-sm', type: 'submit' }, 'Create plan'))
+        )
+        onSubmit(dcaForm, f => api('/api/dca', { symbol: r.symbol, amountUsd: Number(f.get('amountUsd')), intervalHours: Number(f.get('intervalHours')) }), p => `DCA plan created for ${p.symbol}`)
+
+        const targetForm = h('form', { class: 'form' },
+          h('p', { class: 'form-title' }, 'Add to portfolio targets'),
+          field('Target percent', h('input', { name: 'pct', class: 'num', inputmode: 'decimal', placeholder: '10', required: true })),
+          h('div', { class: 'actions' }, h('button', { class: 'btn btn-primary btn-sm', type: 'submit' }, 'Add target'))
+        )
+        onSubmit(
+          targetForm,
+          async f => {
+            const pct = Number(f.get('pct'))
+            if (!(pct > 0 && pct <= 100)) throw new Error('Enter a percent between 0 and 100.')
+            const cfg = await api('/api/portfolio/config')
+            return api('/api/portfolio/targets', { targets: { ...cfg.targets, [r.symbol]: pct }, driftThresholdPct: cfg.driftThresholdPct })
+          },
+          () => `${r.symbol} added to your portfolio targets`
+        )
+
+        quickActions = h('div', {},
+          h('div', { class: 'quick-actions' }, dcaForm, targetForm),
+          h('div', { class: 'actions', style: 'margin-top:10px' },
+            h('a', { class: 'btn btn-quiet btn-sm', href: '#/dca' }, 'Manage all DCA plans'),
+            h('a', { class: 'btn btn-quiet btn-sm', href: '#/portfolio' }, 'Manage portfolio targets'))
+        )
+      }
+
       detailBox.replaceChildren(
         h('div', {},
           secHead(r.symbol, q.halted ? 'Trading halted right now' : r.tradable ? 'Tradable on Robinhood Chain mainnet' : 'No live pool on Robinhood Chain yet'),
           h('div', { class: 'figures' },
-            fig('Mid price', usd(q.mid), `bid ${usd(q.bid)} \u00b7 ask ${usd(q.ask)}`),
-            fig('Day range', `${usd(q.dailyLow)}\u2013${usd(q.dailyHigh)}`, q.halted ? 'Halted' : 'Live')
+            fig('Mid price', usd(q.mid), `bid ${usd(q.bid)} \u00b7 ask ${usd(q.ask)}`).el,
+            fig('Day range', `${usd(q.dailyLow)}\u2013${usd(q.dailyHigh)}`, q.halted ? 'Halted' : 'Live').el
           ),
           h('p', { class: 'muted' }, r.note),
-          r.tradable
-            ? h('div', { class: 'actions' },
-                h('a', { class: 'btn', href: '#/dca?symbol=' + encodeURIComponent(r.symbol) }, 'Start a DCA plan'),
-                h('a', { class: 'btn', href: '#/portfolio?symbol=' + encodeURIComponent(r.symbol) }, 'Add to portfolio targets'))
-            : null
+          quickActions
         )
       )
     } catch (e) {
@@ -448,7 +528,8 @@ function research() {
 
   return {
     root: h('div', {},
-      viewHead('Research', "Every tokenized stock and ETF Robinhood has live on its chain, straight from Robinhood's own asset registry. Pick one, or search, to see its quote and SERV's summary before you DCA or rebalance into it."),
+      viewHead('Research', "Every tokenized stock and ETF Robinhood has live on its chain, straight from Robinhood's own asset registry. Pick one, or search, to see its quote and SERV's summary, then DCA or add it to your portfolio right here."),
+      statCards,
       h('section', { class: 'sec' }, secHead('Look up an asset'), searchForm, detailBox),
       h('section', { class: 'sec' }, secHead('Live assets'), countLine, listBox)
     ),
