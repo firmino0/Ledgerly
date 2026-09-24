@@ -8,6 +8,7 @@
     "dev": "tsx src/agent.ts",
     "dashboard": "tsx src/dashboard-main.ts",
     "preflight": "tsx src/preflight.ts",
+    "robinhood": "tsx scripts/robinhood.ts",
     "check": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "build:vercel": "node scripts/bundle-vercel.mjs"

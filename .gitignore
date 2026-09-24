@@ -5,3 +5,5 @@ data/*
 *.tmp
 *.tmp.ts
 dist
+
+.robinhood-mcp-oauth.json

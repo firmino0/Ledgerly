@@ -1,12 +1,13 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { FileOAuthProvider, hasSavedTokens, robustFetch } from './robinhoodAuth.js'
 
 /**
  * Read-only connector to Robinhood's Agentic Trading MCP server.
  *
- * Status: written against the public MCP protocol, but only the "rejected without a token" path has been tested.
- * Robinhood's login is an OAuth flow completed in a desktop browser, so a headless agent needs a bearer token
- * you obtain yourself and pass as ROBINHOOD_MCP_TOKEN. Tool names are not published, so read-only access is
+ * Sign-in is Robinhood's standard MCP OAuth (dynamic client registration + PKCE), completed by you in a desktop browser with
+ * `npm run robinhood -- login`. The saved tokens live in a git-ignored file and refresh on their own. A static bearer token in
+ * ROBINHOOD_MCP_TOKEN also works. Tool names are not published, so read-only access is
  * enforced by name pattern below. Trading through this connector is intentionally not supported.
  */
 const URL_MCP = 'https://agent.robinhood.com/mcp/trading'
@@ -32,13 +33,17 @@ export function isReadOnlyTool(name: string): boolean {
   return t.length > 0 && READ_VERBS.has(t[0]) && !t.some(w => ACTION_WORDS.has(w))
 }
 
-export const robinhoodMcpConfigured = () => Boolean(process.env.ROBINHOOD_MCP_TOKEN)
+export const robinhoodMcpConfigured = () => Boolean(process.env.ROBINHOOD_MCP_TOKEN) || hasSavedTokens()
 
 async function withClient<T>(fn: (c: Client) => Promise<T>): Promise<T> {
+  // Either a bearer token you supply, or the OAuth sign-in saved by `npm run robinhood -- login` (refreshed automatically).
   const token = process.env.ROBINHOOD_MCP_TOKEN
-  if (!token) throw new Error('ROBINHOOD_MCP_TOKEN is not set. Robinhood requires a login (OAuth) that this agent cannot do on its own.')
+  if (!token && !hasSavedTokens()) throw new Error('Not signed in to Robinhood MCP. Run: npm run robinhood -- login (or set ROBINHOOD_MCP_TOKEN).')
   const client = new Client({ name: 'ledgerly', version: '0.1.0' })
-  const transport = new StreamableHTTPClientTransport(new URL(URL_MCP), { requestInit: { headers: { Authorization: `Bearer ${token}` } } })
+  const transport = new StreamableHTTPClientTransport(
+    new URL(URL_MCP),
+    token ? { requestInit: { headers: { Authorization: `Bearer ${token}` } }, fetch: robustFetch } : { authProvider: new FileOAuthProvider(), fetch: robustFetch }
+  )
   const timer = setTimeout(() => void client.close().catch(() => {}), TIMEOUT_MS)
   try {
     await client.connect(transport)
