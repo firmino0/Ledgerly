@@ -88,7 +88,9 @@ export async function requestTrade(t: TradeRequest, opts: { approved?: boolean }
       log(t, 'needs_approval', label, false, t.why, undefined, ruleFor(verdict))
       return { status: 'pending_approval', approvalId: p.id, amountUsd: t.amountUsd, message: `Held for approval (${verdict.reason}) id ${p.id}` }
     }
-    const result = await execute(t, q, ruleFor(verdict))
+    // A human-approved trade was not "within the approval threshold": say what actually happened.
+    const rule = opts.approved ? 'Approved by a human; re-checked against the caps at the moment of approval.' : ruleFor(verdict)
+    const result = await execute(t, q, rule)
     bumpVersion()
     return result
   } catch (err) {
