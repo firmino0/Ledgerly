@@ -354,8 +354,10 @@ function overview() {
             ['Daily cap', whole(s.policy.maxPerDay)],
             MODE === 'user' ? ['Approval', 'Your own signature'] : ['Approval needed above', whole(s.policy.approvalThreshold)],
             ['Approvals expire after', '24 h'],
-            ['Payees', 'Allowlist only']
-          ].map(([k, v]) => h('div', {}, h('dt', {}, k), h('dd', { class: v.startsWith('$') || v.endsWith('h') ? 'num' : '' }, v)))
+            ['Payees', 'Allowlist only'],
+            s.policy.payeeCoolingHours ? ['New payee holds for', s.policy.payeeCoolingHours + ' h'] : null,
+            s.policy.maxActionsPerDay ? ['Actions a day before a hold', String(s.policy.maxActionsPerDay)] : null
+          ].filter(Boolean).map(([k, v]) => h('div', {}, h('dt', {}, k), h('dd', { class: v.startsWith('$') || v.endsWith('h') ? 'num' : '' }, v)))
         ),
         h('p', { class: 'muted' }, MODE === 'user' ? 'Set by the site owner. The model cannot change them.' : 'Set in your .env file. The model cannot change them.')
       )
@@ -417,7 +419,7 @@ function research() {
           h('tbody', {}, rows)
         )
       ),
-      ...(moreBtn ? [h('div', { class: 'actions', style: 'margin-top:14px' }, moreBtn)] : [])
+      ...(moreBtn ? [h('div', { class: 'actions mt-14' }, moreBtn)] : [])
     )
 
     const missing = visible.map(a => a.symbol).filter(sym => !quotesById.has(sym) && !pending.has(sym))
@@ -489,7 +491,7 @@ function research() {
 
         quickActions = h('div', {},
           h('div', { class: 'quick-actions' }, dcaForm, targetForm),
-          h('div', { class: 'actions', style: 'margin-top:10px' },
+          h('div', { class: 'actions mt-10' },
             h('a', { class: 'btn btn-quiet btn-sm', href: '#/dca' }, 'Manage all DCA plans'),
             h('a', { class: 'btn btn-quiet btn-sm', href: '#/portfolio' }, 'Manage portfolio targets'))
         )
@@ -684,9 +686,29 @@ function payments() {
   }
 }
 
+async function exportLedgerCsv(e) {
+  const btn = e.currentTarget
+  btn.disabled = true
+  try {
+    const res = await fetch('/api/ledger.csv', { headers: MODE === 'user' ? { 'x-ledgerly-mode': 'user' } : {} })
+    if (!res.ok) throw new Error(`Export failed (${res.status})`)
+    const url = URL.createObjectURL(await res.blob())
+    const a = h('a', { href: url, download: 'ledgerly-ledger.csv' })
+    document.body.append(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    toast(err.message, true)
+  } finally {
+    btn.disabled = false
+  }
+}
+
 function ledger() {
   let module = ''
   let verdict = ''
+  let text = ''
   const body = h('div')
   const count = h('span', { class: 'hint' })
   const sel = (label, opts, set) => field(label, h('select', { onchange: e => { set(e.target.value); if (S) render() } }, opts.map(([v, t]) => h('option', { value: v }, t))))
@@ -694,6 +716,7 @@ function ledger() {
     let rows = S.ledger
     if (module) rows = rows.filter(e => e.module === module)
     if (verdict) rows = rows.filter(e => (verdict === 'executed' ? e.executed : e.verdict === verdict))
+    if (text) rows = rows.filter(e => [e.action, e.reasoning, e.rule, e.to, e.txHash, e.module].join(' ').toLowerCase().includes(text))
     count.textContent = `${rows.length} of the latest ${S.ledger.length}`
     if (!rows.length) return body.replaceChildren(empty('Nothing matches.', S.ledger.length ? 'Try clearing a filter.' : 'Decisions appear here as soon as the agent acts.'))
     body.replaceChildren(
@@ -711,10 +734,11 @@ function ledger() {
     )
   }
   return {
-    root: h('div', {}, viewHead('Ledger', 'Every decision, with the reason it was made. Held and refused actions are kept too.'),
+    root: h('div', {}, viewHead('Ledger', 'Every decision, with the reason it was made. Held and refused actions are kept too.', h('button', { class: 'btn', type: 'button', onclick: exportLedgerCsv }, 'Export CSV')),
       h('div', { class: 'filters' },
         sel('Type', [['', 'All'], ['dca', 'DCA'], ['rebalance', 'Rebalance'], ['payroll', 'Payroll'], ['bills', 'Bills']], v => (module = v)),
-        sel('Outcome', [['', 'All'], ['executed', 'Ran'], ['needs_approval', 'Held'], ['deny', 'Denied']], v => (verdict = v))),
+        sel('Outcome', [['', 'All'], ['executed', 'Ran'], ['needs_approval', 'Held'], ['deny', 'Denied']], v => (verdict = v)),
+        field('Search', h('input', { type: 'search', placeholder: 'Payee, asset, rule, reason…', autocomplete: 'off', spellcheck: 'false', oninput: e => { text = e.target.value.trim().toLowerCase(); if (S) render() } }))),
       h('section', { class: 'sec' }, secHead('Decisions', count), body)),
     update: render
   }

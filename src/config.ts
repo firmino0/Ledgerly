@@ -31,8 +31,10 @@ export const config = {
     (process.env.NETWORK === 'mainnet' ? '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168' : undefined)) as `0x${string}` | undefined,
   paymentDecimals: num(process.env.PAYMENT_TOKEN_DECIMALS, 6),
   policy: {
-    maxPerTx: num(process.env.MAX_PER_TX, 50),
-    maxPerDay: num(process.env.MAX_PER_DAY, 200),
-    approvalThreshold: num(process.env.APPROVAL_THRESHOLD, 25)
+    maxPerTx: num(process.env.MAX_PER_TX, 10),
+    maxPerDay: num(process.env.MAX_PER_DAY, 25),
+    approvalThreshold: num(process.env.APPROVAL_THRESHOLD, 1),
+    maxActionsPerDay: num(process.env.MAX_ACTIONS_PER_DAY, 10),
+    payeeCoolingHours: num(process.env.PAYEE_COOLING_HOURS, 24)
   }
 }

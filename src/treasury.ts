@@ -1,10 +1,10 @@
-import { addPending, type PayRequest, payeeSet } from './approvals.js'
+import { addPending, type PayRequest, payeeAgeMs, payeeSet } from './approvals.js'
 import { sendPayment } from './chain.js'
 import { config, tradingOffReason } from './config.js'
 import { policy } from './mode.js'
 import { isUser } from './store.js'
 import { evaluate, ruleFor } from './guardrails.js'
-import { type LedgerEntry, readAll, record, spentToday } from './ledger.js'
+import { type LedgerEntry, actionsInWindow, readAll, record, spentToday } from './ledger.js'
 import { explain } from './reasoning.js'
 
 export type { PayRequest } from './approvals.js'
@@ -39,7 +39,7 @@ async function execute(req: PayRequest, reasoning: string, verdict: LedgerEntry[
 /** Single path for every outgoing payment (payroll and bills). The model never bypasses this. */
 export async function pay(req: PayRequest): Promise<PayResult> {
   if (!config.live) return { status: 'denied', message: off() }
-  const verdict = evaluate(policy(), req, spentToday(readAll()), payeeSet())
+  const verdict = evaluate(policy(), req, spentToday(readAll()), payeeSet(), { actionsToday: actionsInWindow(readAll()), payeeAgeMs: payeeAgeMs(req.to) })
   const context = `Module: ${req.module}. Memo: ${req.memo}. Amount: ${req.amountUsd}. To: ${req.to}. Verdict: ${verdict.decision}${'reason' in verdict ? ` (${verdict.reason})` : ''}.`
   const reasoning = await explain(context)
   const rule = ruleFor(verdict)

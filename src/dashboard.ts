@@ -13,7 +13,7 @@ import { config, tradingOffReason } from './config.js'
 import { policy } from './mode.js'
 import { cancelPlan, createPlan, listPlans, runDue } from './dca.js'
 import { getQuote } from './market.js'
-import { readAll, spentToday } from './ledger.js'
+import { ledgerToCsv, readAll, spentToday } from './ledger.js'
 import { getPortfolioConfig, portfolioView, runRebalance, runRebalanceIfDue, setTargets } from './portfolio.js'
 import { researchAsset } from './research.js'
 import { listRegistry } from './registry.js'
@@ -172,6 +172,10 @@ async function route(req: IncomingMessage, res: ServerResponse, method: string, 
   if (method === 'GET' && path === '/api/wallet') return send(res, 200, await walletBalances(url.searchParams.get('account') ?? ''))
   // A cheap read of just the saved targets, with none of the onchain balance reads /api/state's portfolio view does.
   if (method === 'GET' && path === '/api/portfolio/config') return send(res, 200, getPortfolioConfig())
+  if (method === 'GET' && path === '/api/ledger.csv') {
+    res.writeHead(200, { ...baseHeaders('text/csv; charset=utf-8', 'no-store'), 'content-disposition': 'attachment; filename="ledgerly-ledger.csv"' })
+    return void res.end(ledgerToCsv(readAll()))
+  }
   if (method === 'GET' && path === '/api/registry') return send(res, 200, { assets: await listRegistry() })
   if (method === 'GET' && path === '/api/quotes') {
     // Cheap and read-only (no SERV call, no onchain pool check), so a table full of rows can afford to call this.

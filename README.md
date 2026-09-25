@@ -12,6 +12,7 @@ Giving an AI agent a wallet is risky. Ledgerly is built around one rule: **the m
 
 - **Spend caps:** a per-transaction cap and a daily cap.
 - **Payee allowlist:** payments to an address that was not registered first are always denied.
+- **Cooling and velocity:** a newly added payee holds its first payments for approval (24 hours by default), and a run of many small payments holds once a daily count is reached, so neither can slip under the caps.
 - **Human approval:** anything above a threshold is held until you approve it. Approvals expire after 24 hours, and the caps are re-checked when you approve.
 - **Live only:** everything is real, on Robinhood Chain mainnet. There is no simulation mode. Trading needs two separate settings (`NETWORK=mainnet` and `LIVE_MAINNET=yes`); without them Ledgerly refuses to trade.
 - **A record of every decision:** each action is logged with the model's plain-English reasoning.

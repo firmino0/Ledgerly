@@ -35,3 +35,32 @@ test('ruleFor gives an explicit label even for allow, and passes deny/needs_appr
   const held = evaluate(policy, { amountUsd: 30, to: ok }, 0, allow)
   assert.equal(ruleFor(held), held.decision === 'needs_approval' ? held.reason : undefined)
 })
+
+const strict = { ...policy, maxActionsPerDay: 3, payeeCoolingHours: 24 }
+const HOUR = 3_600_000
+
+test('a payee added inside the cooling window holds every payment, whatever the amount', () => {
+  const v = evaluate(strict, { amountUsd: 1, to: ok }, 0, allow, { payeeAgeMs: 2 * HOUR })
+  assert.equal(v.decision, 'needs_approval')
+  assert.match(v.decision === 'needs_approval' ? v.reason : '', /added less than 24 hours ago/)
+})
+
+test('an established payee, and one added before this was tracked, is not held by cooling', () => {
+  assert.equal(evaluate(strict, { amountUsd: 1, to: ok }, 0, allow, { payeeAgeMs: 30 * HOUR }).decision, 'allow')
+  assert.equal(evaluate(strict, { amountUsd: 1, to: ok }, 0, allow, { payeeAgeMs: null }).decision, 'allow')
+})
+
+test('many small actions hold once the daily count reaches the limit', () => {
+  assert.equal(evaluate(strict, { amountUsd: 1, to: ok }, 0, allow, { actionsToday: 2 }).decision, 'allow')
+  assert.equal(evaluate(strict, { amountUsd: 1, to: ok }, 0, allow, { actionsToday: 3 }).decision, 'needs_approval')
+})
+
+test('velocity and cooling are off when unset, and skipped when a human has already approved', () => {
+  assert.equal(evaluate(policy, { amountUsd: 1, to: ok }, 0, allow, { actionsToday: 999, payeeAgeMs: 0 }).decision, 'allow')
+  assert.equal(evaluate(strict, { amountUsd: 1, to: ok }, 0, allow, {}).decision, 'allow')
+})
+
+test('a hard deny still wins over a hold', () => {
+  assert.equal(evaluate(strict, { amountUsd: 60, to: ok }, 0, allow, { payeeAgeMs: 0, actionsToday: 99 }).decision, 'deny')
+  assert.equal(evaluate(strict, { amountUsd: 5, to: '0xdead' }, 0, allow, { payeeAgeMs: 0 }).decision, 'deny')
+})

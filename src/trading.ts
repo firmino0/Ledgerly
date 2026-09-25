@@ -5,7 +5,7 @@ import { allowLiveSells } from './accounts.js'
 import { policy } from './mode.js'
 import { isUser } from './store.js'
 import { evaluate, ruleFor } from './guardrails.js'
-import { readAll, record, spentToday } from './ledger.js'
+import { actionsInWindow, readAll, record, spentToday } from './ledger.js'
 import { getQuote, type Quote } from './market.js'
 import { balanceOf, buyToken, quoteBuy, quoteSell, sellToken } from './swap.js'
 import { walletAddress } from './chain.js'
@@ -77,7 +77,8 @@ export async function requestTrade(t: TradeRequest, opts: { approved?: boolean }
     }
 
     const rules = opts.approved ? { ...policy(), approvalThreshold: Infinity } : policy()
-    const verdict = evaluate(rules, { amountUsd: t.amountUsd }, spentToday(readAll()), new Set())
+    // A human who approved a held trade has already answered the velocity question, so it is only asked the first time.
+    const verdict = evaluate(rules, { amountUsd: t.amountUsd }, spentToday(readAll()), new Set(), opts.approved ? {} : { actionsToday: actionsInWindow(readAll()) })
 
     if (verdict.decision === 'deny') {
       log(t, 'deny', label, false, t.why, undefined, ruleFor(verdict))

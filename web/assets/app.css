@@ -222,3 +222,6 @@ details.more .full { white-space: pre-line; }
 .intro { max-width: 62ch; }
 .intro-list { margin: 0 0 26px; padding-left: 20px; display: grid; gap: 10px; color: var(--ink-2); }
 .intro .error { color: var(--bad); margin: 0 0 16px; }
+
+.mt-10 { margin-top: 10px; }
+.mt-14 { margin-top: 14px; }

@@ -33,6 +33,7 @@ export const USER_ALLOWED = new Set([
   'GET /api/state',
   'GET /api/wallet',
   'GET /api/portfolio/config',
+  'GET /api/ledger.csv',
   'GET /api/registry',
   'GET /api/quotes',
   'GET /api/research',

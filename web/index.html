@@ -26,6 +26,7 @@
       <a href="#jobs">What it does</a>
       <a href="#path">How it decides</a>
       <a href="#rules">Rules</a>
+      <a href="#keys">Keys</a>
       <a href="#status">Live</a>
       <a href="https://github.com/firmino0/Ledgerly" rel="noopener">GitHub</a>
     </nav>
@@ -44,6 +45,7 @@
       <p class="eyebrow">SERV Hackathon &middot; Robinhood Mainnet &amp; MCP</p>
       <h1>The model proposes.<br><em>Code decides.</em></h1>
       <p class="lede">Ledgerly is a treasury agent on Robinhood Chain. One set of rules &mdash; spend caps, an allowlist, a human approval line &mdash; governs every way it moves money: buying, rebalancing, paying a freelancer, paying a bill. The model explains the decision. It never makes it.</p>
+      <p class="who"><strong>Who it is for:</strong> small crypto teams that pay contributors and recurring bills onchain and want the treasury working, and individual investors who want disciplined DCA and rebalancing.</p>
       <div class="cta">
         <a class="btn btn-primary" href="/account#create" data-accounts hidden>Create an account</a>
         <a class="btn" href="#path">See how it decides</a>
@@ -149,6 +151,83 @@
         </li>
       </ol>
     </div>
+
+    <figure class="diagram">
+      <figcaption class="diagram-cap"><span class="eyebrow">Every path an action can take</span></figcaption>
+      <div class="diagram-scroll">
+        <svg viewBox="0 0 1000 462" role="img" aria-labelledby="flow-title flow-desc">
+          <title id="flow-title">How an action moves through Ledgerly</title>
+          <desc id="flow-desc">A job asks to act and reaches the guardrails. Allowed actions are sent onchain. Denied actions are logged and nothing is sent. Held actions wait for you. If you approve, the caps are checked again and the action is sent. If you reject it is logged, and if nobody answers in 24 hours it expires and cannot be revived. Every branch is written to the ledger.</desc>
+          <defs>
+            <marker id="ah-allow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="m-allow"/></marker>
+            <marker id="ah-hold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="m-hold"/></marker>
+            <marker id="ah-deny" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="m-deny"/></marker>
+            <marker id="ah-mute" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="m-mute"/></marker>
+          </defs>
+
+          <path class="line line-mute" d="M170 220 H212" marker-end="url(#ah-mute)"/>
+          <path class="line line-allow" d="M290 142 V70 H700" marker-end="url(#ah-allow)"/>
+          <path class="line line-hold" d="M368 220 H450" marker-end="url(#ah-hold)"/>
+          <path class="line line-deny" d="M290 298 V382 H430" marker-end="url(#ah-deny)"/>
+          <path class="line line-hold" d="M600 220 H628" marker-end="url(#ah-hold)"/>
+          <path class="line line-allow" d="M752 220 H800" marker-end="url(#ah-allow)"/>
+          <path class="line line-allow" d="M880 188 V102" marker-end="url(#ah-allow)"/>
+          <path class="line line-deny" d="M659 251 L590 350" marker-end="url(#ah-deny)"/>
+          <path class="line line-mute" d="M721 251 L820 350" marker-end="url(#ah-mute)"/>
+
+          <circle class="dot dot-allow" r="5" cx="0" cy="0"/>
+          <circle class="dot dot-hold" r="5" cx="0" cy="0"/>
+          <circle class="dot dot-deny" r="5" cx="0" cy="0"/>
+
+          <text class="l l-allow" x="495" y="58">allow</text>
+          <text class="l l-hold" x="409" y="208">hold</text>
+          <text class="l l-deny" x="360" y="372">deny</text>
+          <text class="l l-allow" x="792" y="178">approve</text>
+          <text class="l l-deny a-end" x="612" y="306">reject</text>
+          <text class="l l-mute a-start" x="798" y="306">no answer in 24 h</text>
+
+          <rect class="node" x="10" y="185" width="160" height="70" rx="12"/>
+          <text class="t" x="90" y="215">A job asks</text>
+          <text class="s" x="90" y="237">buy, sell or pay</text>
+          <text class="s" x="90" y="282">SERV Reasoning</text>
+          <text class="s" x="90" y="300">sizes and explains</text>
+
+          <polygon class="gate" points="290,142 368,220 290,298 212,220"/>
+          <text class="t" x="290" y="219">Guardrails</text>
+          <text class="s" x="290" y="240">plain code</text>
+
+          <rect class="ok" x="700" y="38" width="210" height="64" rx="12"/>
+          <text class="t" x="805" y="66">Sent onchain</text>
+          <text class="s" x="805" y="88">Uniswap v3 · USDG</text>
+
+          <rect class="wait" x="450" y="188" width="150" height="64" rx="12"/>
+          <text class="t" x="525" y="216">Held for you</text>
+          <text class="s" x="525" y="238">waits in the dashboard</text>
+
+          <polygon class="wait" points="690,158 752,220 690,282 628,220"/>
+          <text class="t" x="690" y="226">You decide</text>
+
+          <rect class="ok" x="800" y="188" width="160" height="64" rx="12"/>
+          <text class="t" x="880" y="216">Caps re-checked</text>
+          <text class="s" x="880" y="238">then it runs</text>
+
+          <rect class="stop" x="430" y="350" width="230" height="64" rx="12"/>
+          <text class="t" x="545" y="378">Logged, nothing sent</text>
+          <text class="s" x="545" y="400">the refusal is recorded too</text>
+
+          <rect class="quiet" x="720" y="350" width="240" height="64" rx="12"/>
+          <text class="t" x="840" y="378">Expired after 24 h</text>
+          <text class="s" x="840" y="400">cannot be revived</text>
+
+          <text class="s s-foot" x="500" y="448">Every branch is written to the ledger with the rule that decided it and the model's explanation.</text>
+        </svg>
+      </div>
+      <div class="diagram-legend">
+        <span class="mark mark-allow">Allowed</span>
+        <span class="mark mark-hold">Held</span>
+        <span class="mark mark-deny">Denied</span>
+      </div>
+    </figure>
   </section>
 
   <!-- rules -->
@@ -156,18 +235,63 @@
     <div class="block-head">
       <p class="eyebrow">Rules</p>
       <h2>What the model cannot argue with</h2>
-      <p class="sub">Defaults shown here are set in one file and can be tightened for a first live run.</p>
+      <p class="sub">These are the defaults, and they ship at their tightest. Loosening them is a deliberate change in configuration.</p>
     </div>
     <dl class="spec">
-      <div><dt>Per-transaction cap</dt><dd class="num">$50</dd></div>
-      <div><dt>Daily cap</dt><dd class="num">$200</dd></div>
-      <div><dt>Human approval above</dt><dd class="num">$25</dd></div>
+      <div><dt>Per-transaction cap</dt><dd class="num">$10</dd></div>
+      <div><dt>Daily cap</dt><dd class="num">$25</dd></div>
+      <div><dt>Human approval above</dt><dd class="num">$1</dd></div>
       <div><dt>Approvals expire after</dt><dd class="num">24 h</dd></div>
       <div><dt>Payees</dt><dd>Allowlist only</dd></div>
-      <div><dt>Network</dt><dd>Robinhood Chain mainnet</dd></div>
+      <div><dt>New payee holds for</dt><dd class="num">24 h</dd></div>
+      <div><dt>Actions a day before a hold</dt><dd class="num">10</dd></div>
+      <div><dt>Slippage limit</dt><dd class="num">0.5%</dd></div>
     </dl>
-    <p class="note">Trading only switches on with two separate settings (mainnet and an explicit yes), so a typo cannot start spending. When either is missing Ledgerly refuses to trade instead of pretending. Approved actions are checked against the caps again at the moment of approval.</p>
+    <p class="note">Trading only switches on with two separate settings (mainnet and an explicit yes), so a typo cannot start spending. When either is missing Ledgerly refuses to trade instead of pretending. Approved actions are checked against the caps again at the moment of approval. A newly added payee cannot be paid without approval for its first day, and a run of many small payments holds once the daily count is reached, so neither can slip under the caps.</p>
     <p class="note">Held actions can be approved two ways: the agent's own wallet sends them within your limits, or you connect a browser wallet and <strong>sign them yourself</strong>. The server checks that what your wallet sent matches what was prepared before it records anything.</p>
+  </section>
+
+  <!-- keys -->
+  <section id="keys" class="block wrap">
+    <div class="block-head">
+      <p class="eyebrow">Keys and limits</p>
+      <h2>Who holds the keys, and the most that can go wrong</h2>
+      <p class="sub">The first question about any money agent is who holds the private key. Ledgerly supports three answers, and you choose.</p>
+    </div>
+    <div class="trio">
+      <div>
+        <h3>Self-hosted</h3>
+        <p>You run it and hold everything. We never touch a key. Free, open source, and the most work.</p>
+      </div>
+      <div>
+        <h3>Agent wallet, small float</h3>
+        <p>The agent has its own wallet, funded to a small float. Your treasury stays in your own wallet. This is how the hosted dashboard runs.</p>
+      </div>
+      <div>
+        <h3>Sign it yourself</h3>
+        <p>The agent never has a key. Every action is prepared, and your own wallet signs it. Accounts work this way, with no server-side key at all.</p>
+      </div>
+    </div>
+    <p class="note"><strong>The most it can lose, stated plainly.</strong> Through Ledgerly, the most it can move in a day is the daily cap, and never more than the wallet holds. If the agent wallet's key itself were stolen, the caps would not help, because a thief would not go through Ledgerly. So the loss is bounded by what the wallet holds. That is why it is funded to a float and not the treasury.</p>
+
+    <div class="status status-gap">
+      <div>
+        <h3><span class="mark mark-allow">Before a trade</span></h3>
+        <ul>
+          <li>Every swap carries a minimum output. The default slippage limit is 0.5%, and a fill worse than that reverts instead of executing</li>
+          <li>A quote more than 3% away from Robinhood's own price is rejected as a broken pool</li>
+          <li>No pool with a sane quote means nothing is sent. Halted assets are skipped</li>
+        </ul>
+      </div>
+      <div>
+        <h3><span class="mark mark-allow">Around approval</span></h3>
+        <ul>
+          <li>A held action is measured against the caps again at the moment it is approved</li>
+          <li>Held actions expire after 24 hours, and an expired one cannot be revived, only proposed again</li>
+          <li>A prepared action can be used once, and a signed transaction must match what was prepared and come from the connected wallet</li>
+        </ul>
+      </div>
+    </div>
   </section>
 
   <!-- serv -->

@@ -23,6 +23,7 @@ export type Pending = { id: string; createdAt: string } & (
 
 interface State {
   payees: Record<string, string> // lowercase address -> label
+  payeeAdded: Record<string, string> // lowercase address -> when it was first added (older payees have none)
   pending: Pending[]
 }
 
@@ -32,15 +33,22 @@ export const APPROVAL_TTL_MS = 24 * 3_600_000
 const FILE = dataPath('state.json')
 const load = (): State => {
   const s = readJson<Partial<State>>(FILE, {})
-  return { payees: s.payees ?? {}, pending: s.pending ?? [] }
+  return { payees: s.payees ?? {}, payeeAdded: s.payeeAdded ?? {}, pending: s.pending ?? [] }
 }
 const save = (s: State) => writeJson(FILE, s)
 
 // ---------- payees ----------
 export function addPayee(address: string, label: string): void {
   const s = load()
-  s.payees[address.toLowerCase()] = label
+  const key = address.toLowerCase()
+  if (!s.payees[key]) s.payeeAdded[key] = new Date().toISOString()
+  s.payees[key] = label
   save(s)
+}
+/** How long ago a payee was first added, or null for one added before this was tracked (treated as established). */
+export function payeeAgeMs(address: string, now = Date.now()): number | null {
+  const at = load().payeeAdded[address.toLowerCase()]
+  return at ? Math.max(0, now - new Date(at).getTime()) : null
 }
 export const listPayees = () => Object.entries(load().payees).map(([address, label]) => ({ address, label }))
 export const payeeSet = (): Set<string> => new Set(Object.keys(load().payees))
