@@ -71,35 +71,6 @@ Other people can use it through real **accounts** (`/account`, off unless you en
 
 Design notes: a modern fintech dashboard look (neutral slate surfaces, one green accent, cards with real shadows instead of ledger-style rules, monospace for numbers). All text is inserted as text nodes rather than HTML, and the server sends a strict Content-Security-Policy with no inline scripts or styles. Approving a held action while in live mode asks for a browser confirmation first.
 
-## Quick start
-
-Requires Node.js 20+.
-
-```bash
-npm install
-cp .env.example .env
-```
-
-Edit `.env` and set at least `SERV_API_KEY` (the SERV Reasoning key from console.openserv.ai). Then:
-
-```bash
-npm run dashboard
-```
-
-Open http://localhost:3000 for the website and http://localhost:3000/app for the dashboard. Everything is live, so fund the wallet with a small amount first.
-
-Try this with a few dollars: set targets `NVDA 40, AAPL 30`, press **Rebalance now**, and approve the held trades.
-
-### Commands
-
-| Command | What it does |
-|---|---|
-| `npm run dashboard` | Dashboard plus the DCA scheduler |
-| `npm run dev` | Same, and connects as an OpenServ agent if `OPENSERV_API_KEY` is set |
-| `npm run preflight` | Read-only mainnet readiness check (chain, contracts, quotes, wallet balances) |
-| `npm test` | Unit tests |
-| `npm run check` | Type check |
-| `npm run build:vercel` | Rebuild the bundle the Vercel function runs (needed after changing `src/`; `npm test` fails if it is stale) |
 
 ## Two ways to approve a held action
 
@@ -137,12 +108,6 @@ Ledgerly runs on Robinhood Chain mainnet with real funds. Confirmed transactions
 **Limits:**
 - Holdings are valued at the mid price and ignore Robinhood's small share multiplier (about 0.1%).
 - Locally the dashboard listens on localhost only and has no login. Hosted, it is protected by a single shared password (one user, not a multi-user system).
-
-## Security notes
-
-- Never commit `.env`. It is already in `.gitignore`.
-- Locally the dashboard binds to localhost, rejects unexpected Host headers and non-JSON requests, and renders log text safely. Hosted, it also requires a password, rate-limits sign-in, and refuses to serve the API if no strong password is set.
-- The decision log records model output, which can include user-typed memos. Do not put private information in payee names or memos, especially if your SERV workspace has data collection turned on.
 
 ## Tech
 
